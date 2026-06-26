@@ -1,0 +1,42 @@
+# Makefile for the dense FEM heat solver with OpenMP target GPU offloading.
+#
+# Uses unified shared memory so that managed allocations (new/malloc) are
+# accessible from both host and device without explicit data transfers.
+#
+# Adjust SM_ARCH to match the target GPU (e.g. sm_70, sm_80, sm_90).
+
+SM_ARCH = sm_70
+
+CXX = clang++
+OMP_TARGET_FLAGS = -fopenmp -fopenmp-targets=nvptx64 \
+                   -Xopenmp-target -march=$(SM_ARCH) \
+                   -fopenmp-offload-mandatory
+CXXFLAGS = -std=c++17 -O3 $(OMP_TARGET_FLAGS) -DNDEBUG
+LDFLAGS = $(OMP_TARGET_FLAGS)
+
+BUILD_DIR = build
+
+.PHONY: all clean
+
+all: $(BUILD_DIR)/fem_heat
+
+$(BUILD_DIR):
+	mkdir -p $@
+
+$(BUILD_DIR)/solver.o: solver.cpp solver.hpp utils.hpp | $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/utils.o: utils.cpp utils.hpp | $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/test.o: test.cpp test.hpp utils.hpp | $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/main.o: main.cpp solver.hpp test.hpp utils.hpp | $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/fem_heat: $(BUILD_DIR)/solver.o $(BUILD_DIR)/utils.o $(BUILD_DIR)/test.o $(BUILD_DIR)/main.o
+	$(CXX) $(LDFLAGS) $^ -o $@
+
+clean:
+	rm -rf $(BUILD_DIR)
