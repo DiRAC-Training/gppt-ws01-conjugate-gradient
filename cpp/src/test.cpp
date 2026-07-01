@@ -13,20 +13,19 @@ bool nearly_eql(float x, float y, float epsilon) {
 bool test_matvec_identity() {
   const int n = 3;
 
-  auto A = std::vector<float>(n * n);
-  std::fill(A.begin(), A.end(), 0.0);
+  float A[n * n] = {0};
   for (int i = 0; i < n; ++i) {
     A[idx(i, i, n)] = 1.0;
   }
   float x[3] = {1.0, 2.0, 3.0};
   float y[3];
 
-  matvec(y, A.data(), x, n);
+  matvec(y, A, x, n);
 
   // Because A is the identity matrix, y and x should be identical
-  bool passed = false;
+  bool passed = true;
   for (int i = 0; i < n; ++i) {
-    passed |= nearly_eql(x[i], y[i], 1e-6);
+    passed &= nearly_eql(x[i], y[i], 1e-6);
   }
 
   return passed;
@@ -36,22 +35,25 @@ bool test_matvec_simple() {
   const int n = 3;
 
   // Create a matrix with known values
-  auto A = std::vector<float>(n * n);
   float mat[9] = {-1, -6, 2, 4, 3, 10, 0, -100, 1};
-  std::copy(mat, mat + 9, A.begin());
 
   // x and y_soln are calculated solutions to y = Ax.
   float x[3] = {-1.0, 2.0, 0.0};
+
+  // mat * x =
+  // -1*-1 + -6*2 +  2*0 =  -11
+  //  4*-1 +  3*2 + 10*0 =    2
+  //  0*-1 + -100*2 + 1*0 = -200
   float y_soln[3] = {-11, 2, -200};
 
   // Calculate y with our matvec test
   float y[3];
-  matvec(y, A.data(), x, n);
+  matvec(y, mat, x, n);
 
   // Compare y to y_soln
-  bool passed = false;
+  bool passed = true;
   for (int i = 0; i < n; ++i) {
-    passed |= nearly_eql(y_soln[i], y[i], 1e-6);
+    passed &= nearly_eql(y_soln[i], y[i], 1e-6);
   }
 
   return passed;
