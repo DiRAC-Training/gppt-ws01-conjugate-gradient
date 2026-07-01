@@ -6,8 +6,10 @@ program main
   integer, parameter :: n = 8192
   integer, parameter :: cg_max_iter = 32
   logical, parameter :: RANDOMISE_SEED = .true.
+  real,    parameter :: DIAG_SCALE = -1.0   ! <= 0 uses the default n/32 diag_shift; set > 0 (e.g. 0.42) for an ill-conditioned matrix
   ! integer, parameter :: n = 32000
   ! integer, parameter :: cg_max_iter = 320
+  ! real,    parameter :: DIAG_SCALE = 0.42
   ! logical, parameter :: RANDOMISE_SEED = .false.
 
   real, allocatable :: A(:)
@@ -43,9 +45,15 @@ program main
   x = 0.0
 
   ! Solve
+  !$omp target data map(to: A(1:n*n), b(1:n)) &
+  !$omp             map(tofrom: x(1:n))
+
+  ! Solve
   call system_clock(count1, count_rate)
   iters = cg_solve(x, A, b, n, cg_max_iter)
   call system_clock(count2)
+
+  !$omp end target data
   
   duration_us = (int(count2 - count1, 8) * 1000000_8) / int(count_rate, 8)
 
@@ -150,6 +158,7 @@ contains
     integer, intent(in) :: n
     real, intent(out) :: A(n*n)
     real, allocatable :: B(:)
+    real :: diag_shift
     integer :: i, j
 
     print *, "Generating matrix"
@@ -164,10 +173,15 @@ contains
       end do
     end do
 
-    ! Add n * identity to make diagonally dominant => positive definite
+    ! Diagonal shift to make it positive definite. DIAG_SCALE > 0 uses
+    ! f*sqrt(n) (barely SPD, ill-conditioned => more iterations); otherwise n/32.
+    if (DIAG_SCALE > 0.0) then
+      diag_shift = DIAG_SCALE * sqrt(real(n))
+    else
+      diag_shift = max(real(n) / 32.0, 1.0)
+    end if
     do i = 1, n
-      A(idx(i, i, n)) = A(idx(i, i, n)) + max(real(n) / 32.0, 1.0)
-      ! A(idx(i, i, n)) = A(idx(i, i, n)) + 0.42 * sqrt(real(n))
+      A(idx(i, i, n)) = A(idx(i, i, n)) + diag_shift
     end do
 
     deallocate(B)
