@@ -6,6 +6,9 @@ program main
   integer, parameter :: n = 8192
   integer, parameter :: cg_max_iter = 32
   logical, parameter :: RANDOMISE_SEED = .true.
+  ! integer, parameter :: n = 32000
+  ! integer, parameter :: cg_max_iter = 320
+  ! logical, parameter :: RANDOMISE_SEED = .false.
 
   real, allocatable :: A(:)
   real, allocatable :: x_soln(:), b(:), x(:)
@@ -22,13 +25,12 @@ program main
     stop 1
   end if
 
-  allocate(A(n * n))
+  allocate(A(n * n)) ! note n*n
   allocate(x_soln(n))
   allocate(b(n))
   allocate(x(n))
 
-  ! Seed the RNG once, up front, so every subsequent random_number call (the
-  ! matrix and the solution vector) is reproducible when RANDOMISE_SEED is .false.
+  ! Seed the RNG 
   call init_rng(RANDOMISE_SEED)
 
   ! Initial conditions
@@ -101,9 +103,7 @@ contains
     end do
   end subroutine calc_b
 
-  ! Seed Fortran's intrinsic RNG once for the whole run. With randomise = .false.
-  ! a fixed seed is used, giving reproducible results; with .true. the seed is
-  ! taken from the system clock. (Mirrors the RANDOMISE_SEED switch in the C++.)
+  ! Seed the RNG 
   subroutine init_rng(randomise)
     logical, intent(in) :: randomise
     integer :: seed_size, base, i
@@ -118,8 +118,7 @@ contains
       base = 42
     end if
 
-    ! Spread the base value across the seed array; an all-equal seed can give
-    ! the generator a poor starting state.
+    ! Spread the base value across the seed array
     seed = base + 37 * [(i, i = 0, seed_size - 1)]
     call random_seed(put = seed)
 
@@ -132,9 +131,6 @@ contains
     real, intent(in) :: min_val, max_val
     integer :: i
 
-    ! random_number fills the whole array with uniform values in [0, 1); the loop
-    ! then rescales them to [min_val, max_val). Reproducibility is governed by the
-    ! one-off seeding in init_rng, not by anything here.
     call random_number(x)
     !$omp parallel do
     do i = 1, size
@@ -171,6 +167,7 @@ contains
     ! Add n * identity to make diagonally dominant => positive definite
     do i = 1, n
       A(idx(i, i, n)) = A(idx(i, i, n)) + max(real(n) / 32.0, 1.0)
+      ! A(idx(i, i, n)) = A(idx(i, i, n)) + 0.42 * sqrt(real(n))
     end do
 
     deallocate(B)

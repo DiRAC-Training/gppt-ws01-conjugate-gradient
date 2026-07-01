@@ -5,6 +5,7 @@ contains
 
   ! Flat row-major index into an n-by-n matrix
   pure function idx(i, j, n) result(k)
+    !$omp declare target
     integer, intent(in) :: i, j, n
     integer :: k
     k = (i - 1) * n + j
@@ -19,7 +20,7 @@ contains
     integer :: i, j
     real :: s
 
-    !$omp parallel do private(j, s)
+    !$omp target teams distribute parallel do private(j, s)
     do i = 1, n
       s = 0.0
       do j = 1, n
@@ -38,7 +39,7 @@ contains
     integer :: i
 
     sum_val = 0.0
-    !$omp parallel do reduction(+:sum_val)
+    !$omp target teams distribute parallel do reduction(+:sum_val)
     do i = 1, n
       sum_val = sum_val + a(i) * b(i)
     end do
@@ -53,7 +54,7 @@ contains
     real, intent(in) :: beta
     integer :: i
 
-    !$omp parallel do
+    !$omp target teams distribute parallel do
     do i = 1, n
       y(i) = alpha * x(i) + beta * y(i)
     end do
@@ -66,7 +67,7 @@ contains
     real, intent(in) :: A(n*n)
     real, intent(in) :: b(n)
     integer :: n_iter
-    
+
     real, allocatable :: r(:), p(:), A_times_p(:)
     real :: residual_sq_old, residual_sq_new
     real :: alpha, beta
@@ -77,15 +78,23 @@ contains
     allocate(p(n))
     allocate(A_times_p(n))
 
+    ! Map all arrays to the device once for the whole solve.
+    !$omp target data map(to: A(1:n*n), b(1:n)) &
+    !$omp             map(tofrom: x(1:n)) &
+    !$omp             map(alloc: r(1:n), p(1:n), A_times_p(1:n))
+
     ! Step 1: r_0 = f - K*x_0
     call matvec(r, A, x, n)
-    !$omp parallel do
+    !$omp target teams distribute parallel do
     do i = 1, n
       r(i) = b(i) - r(i)
     end do
-
+    
     ! Step 2: p_0 = r_0
-    p = r
+    !$omp target teams distribute parallel do
+    do i = 1, n
+      p(i) = r(i)
+    end do
 
     residual_sq_old = dot(r, r, n)
 
@@ -103,15 +112,15 @@ contains
       ! Step 3d: beta_k = (r_{k+1} . r_{k+1}) / (r_k . r_k)
       !          p_{k+1} = r_{k+1} + beta_k * p_k
       residual_sq_new = dot(r, r, n)
-      
       if (residual_sq_new < EPS) exit
-      
+
       beta = residual_sq_new / residual_sq_old
       call axpby(p, r, 1.0, beta, n)
       residual_sq_old = residual_sq_new
 
       print '(I0, A, E15.6)', n_iter, ': r = ', residual_sq_new / n
     end do
+    !$omp end target data
 
     deallocate(r)
     deallocate(p)

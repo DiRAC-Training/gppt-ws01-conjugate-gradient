@@ -1,29 +1,32 @@
-FC = gfortran
+FC ?= flang
 FCFLAGS = -O3 -fopenmp -Wall -march=native
-LDFLAGS = -fopenmp
+OFFLOAD = --offload-arch=sm_80
 
-SRC_DIR = .
 BUILD_DIR = build
 
-SOURCES = solver.f90 test.f90 main.f90
-OBJECTS = $(patsubst %.f90,$(BUILD_DIR)/%.o,$(SOURCES))
+# solver.f90 (cpu) and solver_gpu.f90 (gpu) are alternative implementations of
+# solver_mod, each built with test.f90 and main.f90. gpu adds nvptx offloading.
+SOLVER = solver.f90
+BIN    = conj_grad
+cpu:        SOLVER = solver.f90
+cpu:        BIN    = conj_grad
+gpu:        SOLVER = solver_gpu.f90
+gpu:        BIN    = conj_grad_gpu
+gpu:        FCFLAGS += $(OFFLOAD)
 
-.PHONY: all clean
+.DEFAULT_GOAL := cpu
+.PHONY: cpu gpu program clean
 
-all: $(BUILD_DIR)/conj_grad
+cpu gpu: program
+
+program: | $(BUILD_DIR)
+	$(FC) $(FCFLAGS) -J$(BUILD_DIR) -c $(SOLVER) -o $(BUILD_DIR)/solver.o
+	$(FC) $(FCFLAGS) -J$(BUILD_DIR) -c test.f90  -o $(BUILD_DIR)/test.o
+	$(FC) $(FCFLAGS) -J$(BUILD_DIR) -c main.f90  -o $(BUILD_DIR)/main.o
+	$(FC) $(FCFLAGS) $(BUILD_DIR)/solver.o $(BUILD_DIR)/test.o $(BUILD_DIR)/main.o -o $(BUILD_DIR)/$(BIN)
 
 $(BUILD_DIR):
 	mkdir -p $@
 
-# Dependencies
-$(BUILD_DIR)/test.o: $(BUILD_DIR)/solver.o
-$(BUILD_DIR)/main.o: $(BUILD_DIR)/solver.o $(BUILD_DIR)/test.o
-
-$(BUILD_DIR)/%.o: %.f90 | $(BUILD_DIR)
-	$(FC) $(FCFLAGS) -J$(BUILD_DIR) -c $< -o $@
-
-$(BUILD_DIR)/conj_grad: $(OBJECTS) | $(BUILD_DIR)
-	$(FC) $(LDFLAGS) $^ -o $@
-
 clean:
-	rm -rf $(BUILD_DIR)
+	rm -rf $(BUILD_DIR) *.mod
