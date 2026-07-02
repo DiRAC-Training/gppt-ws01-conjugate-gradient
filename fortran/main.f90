@@ -6,11 +6,11 @@ program main
   integer, parameter :: n = 8192
   integer, parameter :: cg_max_iter = 32
   logical, parameter :: RANDOMISE_SEED = .true.
-  real,    parameter :: DIAG_SCALE = -1.0   ! <= 0 uses the default n/32 diag_shift; set > 0 (e.g. 0.42) for an ill-conditioned matrix
+  real,    parameter :: DIAG_SCALE = -1.0 
   ! integer, parameter :: n = 32000
   ! integer, parameter :: cg_max_iter = 320
-  ! real,    parameter :: DIAG_SCALE = 0.42
   ! logical, parameter :: RANDOMISE_SEED = .false.
+  ! real,    parameter :: DIAG_SCALE = 0.42
 
   real, allocatable :: A(:)
   real, allocatable :: x_soln(:), b(:), x(:)

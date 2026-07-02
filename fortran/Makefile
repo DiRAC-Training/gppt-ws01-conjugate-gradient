@@ -1,5 +1,5 @@
 FC ?= flang
-FCFLAGS = -O3 -fopenmp -Wall -march=native
+FCFLAGS = -O3 -fopenmp -march=native
 OFFLOAD = --offload-arch=sm_80
 
 BUILD_DIR = build
