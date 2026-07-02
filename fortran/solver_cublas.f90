@@ -1,10 +1,12 @@
 module solver_mod
-  use precision_mod
+  use iso_c_binding
+  use cublas_mod
   implicit none
+
+  type(c_ptr) :: handle = c_null_ptr
 
 contains
 
-  ! Flat row-major index into an n-by-n matrix
   pure function idx(i, j, n) result(k)
     !$omp declare target
     integer, intent(in) :: i, j, n
@@ -12,68 +14,74 @@ contains
     k = (i - 1) * n + j
   end function idx
 
-  ! Dense matrix-vector product: y = A * x.
+  subroutine ensure_handle()
+    if (.not. c_associated(handle)) then
+      if (cublasCreate(handle) /= CUBLAS_STATUS_SUCCESS) error stop "cublasCreate failed"
+    end if
+  end subroutine ensure_handle
+
+  ! y = A * x. A is row-major, so cuBLAS sees A^T => CUBLAS_OP_T recovers A*x.
   subroutine matvec(y, A, x, n)
     integer, intent(in) :: n
-    real(wp), intent(out) :: y(n)
-    real(wp), intent(in) :: A(n*n)
-    real(wp), intent(in) :: x(n)
-    integer :: i, j
-    real(wp) :: s
+    real, intent(out) :: y(n)
+    real, intent(in) :: A(n*n)
+    real, intent(in) :: x(n)
+    real(c_float) :: one, zero
+    integer(c_int) :: stat
 
-    !$omp target teams distribute parallel do private(j, s)
-    do i = 1, n
-      s = 0.0_wp
-      do j = 1, n
-        s = s + A(idx(i, j, n)) * x(j)
-      end do
-      y(i) = s
-    end do
+    one = 1.0; zero = 0.0
+    call ensure_handle()
+    !$omp target data use_device_addr(A, x, y)
+    stat = cublasSgemv(handle, CUBLAS_OP_T, n, n, one, A, n, x, 1, zero, y, 1)
+    !$omp end target data
   end subroutine matvec
 
-  ! Dot product: result = sum(a[i] * b[i]).
-  function dot(a, b, n) result(sum_val)
+  function dot(a, b, n) result(res)
     integer, intent(in) :: n
-    real(wp), intent(in) :: a(n)
-    real(wp), intent(in) :: b(n)
-    real(wp) :: sum_val
-    integer :: i
+    real, intent(in) :: a(n)
+    real, intent(in) :: b(n)
+    real :: res
+    real(c_float) :: r
+    integer(c_int) :: stat
 
-    sum_val = 0.0_wp
-    !$omp target teams distribute parallel do reduction(+:sum_val)
-    do i = 1, n
-      sum_val = sum_val + a(i) * b(i)
-    end do
+    call ensure_handle()
+    !$omp target data use_device_addr(a, b)
+    stat = cublasSdot(handle, n, a, 1, b, 1, r)
+    !$omp end target data
+    res = r
   end function dot
 
-  ! AXPBY operation: y = alpha * x + beta * y.
+  ! y = alpha * x + beta * y.
   subroutine axpby(y, x, alpha, beta, n)
     integer, intent(in) :: n
-    real(wp), intent(inout) :: y(n)
-    real(wp), intent(in) :: x(n)
-    real(wp), intent(in) :: alpha
-    real(wp), intent(in) :: beta
-    integer :: i
+    real, intent(inout) :: y(n)
+    real, intent(in) :: x(n)
+    real, intent(in) :: alpha
+    real, intent(in) :: beta
+    real(c_float) :: a, b
+    integer(c_int) :: stat
 
-    !$omp target teams distribute parallel do
-    do i = 1, n
-      y(i) = alpha * x(i) + beta * y(i)
-    end do
+    a = alpha; b = beta
+    call ensure_handle()
+    !$omp target data use_device_addr(x, y)
+    if (b /= 1.0) stat = cublasSscal(handle, n, b, y, 1)
+    stat = cublasSaxpy(handle, n, a, x, 1, y, 1)
+    !$omp end target data
   end subroutine axpby
 
   ! Solve A*x = b using the conjugate gradient method.
   function cg_solve(x, A, b, n, max_iter) result(n_iter)
     integer, intent(in) :: n, max_iter
-    real(wp), intent(inout) :: x(n)
-    real(wp), intent(in) :: A(n*n)
-    real(wp), intent(in) :: b(n)
+    real, intent(inout) :: x(n)
+    real, intent(in) :: A(n*n)
+    real, intent(in) :: b(n)
     integer :: n_iter
 
-    real(wp), allocatable :: r(:), p(:), A_times_p(:)
-    real(wp) :: residual_sq_old, residual_sq_new
-    real(wp) :: alpha, beta
+    real, allocatable :: r(:), p(:), A_times_p(:)
+    real :: residual_sq_old, residual_sq_new
+    real :: alpha, beta
     integer :: i
-    real(wp), parameter :: EPS = epsilon(1.0_wp)
+    real, parameter :: EPS = epsilon(1.0)
 
     allocate(r(n))
     allocate(p(n))
@@ -103,10 +111,10 @@ contains
       alpha = residual_sq_old / dot(p, A_times_p, n)
 
       ! Step 3b: x_{k+1} = x_k + alpha_k * p_k
-      call axpby(x, p, alpha, 1.0_wp, n)
+      call axpby(x, p, alpha, 1.0, n)
 
       ! Step 3c: r_{k+1} = r_k - alpha_k * K*p_k
-      call axpby(r, A_times_p, -alpha, 1.0_wp, n)
+      call axpby(r, A_times_p, -alpha, 1.0, n)
 
       ! Step 3d: beta_k = (r_{k+1} . r_{k+1}) / (r_k . r_k)
       !          p_{k+1} = r_{k+1} + beta_k * p_k
@@ -114,7 +122,7 @@ contains
       if (residual_sq_new < EPS) exit
 
       beta = residual_sq_new / residual_sq_old
-      call axpby(p, r, 1.0_wp, beta, n)
+      call axpby(p, r, 1.0, beta, n)
       residual_sq_old = residual_sq_new
 
       print '(I0, A, E15.6)', n_iter, ': r = ', residual_sq_new / n

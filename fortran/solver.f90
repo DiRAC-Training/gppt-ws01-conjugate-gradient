@@ -1,4 +1,5 @@
 module solver_mod
+  use precision_mod
   implicit none
 
 contains
@@ -13,15 +14,15 @@ contains
   ! Dense matrix-vector product: y = A * x.
   subroutine matvec(y, A, x, n)
     integer, intent(in) :: n
-    real, intent(out) :: y(n)
-    real, intent(in) :: A(n*n)
-    real, intent(in) :: x(n)
+    real(wp), intent(out) :: y(n)
+    real(wp), intent(in) :: A(n*n)
+    real(wp), intent(in) :: x(n)
     integer :: i, j
-    real :: s
+    real(wp) :: s
 
     !$omp parallel do private(j, s)
     do i = 1, n
-      s = 0.0
+      s = 0.0_wp
       do j = 1, n
         s = s + A(idx(i, j, n)) * x(j)
       end do
@@ -32,12 +33,12 @@ contains
   ! Dot product: result = sum(a[i] * b[i]).
   function dot(a, b, n) result(sum_val)
     integer, intent(in) :: n
-    real, intent(in) :: a(n)
-    real, intent(in) :: b(n)
-    real :: sum_val
+    real(wp), intent(in) :: a(n)
+    real(wp), intent(in) :: b(n)
+    real(wp) :: sum_val
     integer :: i
 
-    sum_val = 0.0
+    sum_val = 0.0_wp
     !$omp parallel do reduction(+:sum_val)
     do i = 1, n
       sum_val = sum_val + a(i) * b(i)
@@ -47,10 +48,10 @@ contains
   ! AXPBY operation: y = alpha * x + beta * y.
   subroutine axpby(y, x, alpha, beta, n)
     integer, intent(in) :: n
-    real, intent(inout) :: y(n)
-    real, intent(in) :: x(n)
-    real, intent(in) :: alpha
-    real, intent(in) :: beta
+    real(wp), intent(inout) :: y(n)
+    real(wp), intent(in) :: x(n)
+    real(wp), intent(in) :: alpha
+    real(wp), intent(in) :: beta
     integer :: i
 
     !$omp parallel do
@@ -62,16 +63,16 @@ contains
   ! Solve A*x = b using the conjugate gradient method.
   function cg_solve(x, A, b, n, max_iter) result(n_iter)
     integer, intent(in) :: n, max_iter
-    real, intent(inout) :: x(n)
-    real, intent(in) :: A(n*n)
-    real, intent(in) :: b(n)
+    real(wp), intent(inout) :: x(n)
+    real(wp), intent(in) :: A(n*n)
+    real(wp), intent(in) :: b(n)
     integer :: n_iter
-    
-    real, allocatable :: r(:), p(:), A_times_p(:)
-    real :: residual_sq_old, residual_sq_new
-    real :: alpha, beta
+
+    real(wp), allocatable :: r(:), p(:), A_times_p(:)
+    real(wp) :: residual_sq_old, residual_sq_new
+    real(wp) :: alpha, beta
     integer :: i
-    real, parameter :: EPS = epsilon(1.0)
+    real(wp), parameter :: EPS = epsilon(1.0_wp)
 
     allocate(r(n))
     allocate(p(n))
@@ -95,19 +96,19 @@ contains
       alpha = residual_sq_old / dot(p, A_times_p, n)
 
       ! Step 3b: x_{k+1} = x_k + alpha_k * p_k
-      call axpby(x, p, alpha, 1.0, n)
+      call axpby(x, p, alpha, 1.0_wp, n)
 
       ! Step 3c: r_{k+1} = r_k - alpha_k * K*p_k
-      call axpby(r, A_times_p, -alpha, 1.0, n)
+      call axpby(r, A_times_p, -alpha, 1.0_wp, n)
 
       ! Step 3d: beta_k = (r_{k+1} . r_{k+1}) / (r_k . r_k)
       !          p_{k+1} = r_{k+1} + beta_k * p_k
       residual_sq_new = dot(r, r, n)
-      
+
       if (residual_sq_new < EPS) exit
-      
+
       beta = residual_sq_new / residual_sq_old
-      call axpby(p, r, 1.0, beta, n)
+      call axpby(p, r, 1.0_wp, beta, n)
       residual_sq_old = residual_sq_new
 
       print '(I0, A, E15.6)', n_iter, ': r = ', residual_sq_new / n
