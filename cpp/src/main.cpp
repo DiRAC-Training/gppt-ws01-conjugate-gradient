@@ -11,11 +11,22 @@ using std::chrono::duration_cast;
 using std::chrono::high_resolution_clock;
 
 const bool RANDOMISE_SEED = true;
+// const bool RANDOMISE_SEED = false;
+
+static std::mt19937 rng;
+
+/// Create a rng
+void init_rng(bool randomise) {
+  std::mt19937::result_type seed = 42;
+  if (randomise) {
+    seed = static_cast<std::mt19937::result_type>(
+        std::chrono::system_clock::now().time_since_epoch().count());
+  }
+  rng.seed(seed);
+}
 
 /// Generate b from Ax = b
 void calc_b(float *b, const float *A, const float *x, const int n) {
-// This is just a naive matrix-vector multiply.
-// You could use matvec in solver.cpp if you trust it!
 #pragma omp parallel for
   for (int i = 0; i < n; ++i) {
     b[i] = 0.0;
@@ -26,18 +37,11 @@ void calc_b(float *b, const float *A, const float *x, const int n) {
   }
 }
 
-/// Fill x with random values
+/// Fill x with random values in [min, max)
 void fill_rand_vec(float *x, int size, float min, float max) {
-  int seed = 42;
-
-  if (RANDOMISE_SEED) {
-    seed = std::chrono::system_clock::now().time_since_epoch().count();
-  }
-  srand(seed);
-
-#pragma omp parallel for
+  std::uniform_real_distribution<float> dist(min, max);
   for (int i = 0; i < size; ++i) {
-    x[i] = min + (static_cast<float> (rand()) / ( static_cast <float> (RAND_MAX/(max-min))));
+    x[i] = dist(rng);
   }
 }
 
@@ -59,6 +63,7 @@ void generate_positive_definite(float *A, int n) {
   // Add n * identity to make diagonally dominant => positive definite
   for (int i = 0; i < n; ++i) {
     A[idx(i, i, n)] += fmax(float(n) / 32, 1.0);
+    // A[idx(i, i, n)] += 0.42 * std::sqrt(float(n));
   }
 }
 
@@ -90,11 +95,15 @@ int main() {
 
   const int n = 8192;
   const int cg_max_iter = 32;
+  // const int n = 32000;
+  // const int cg_max_iter = 320;
 
   float *A = new float[n * n]; // note n*n
   float *x_soln = new float[n];
   float *b = new float[n];
   float *x = new float[n];
+
+  init_rng(RANDOMISE_SEED);
 
   // Initial conditions
   generate_positive_definite(A, n); // Generate positive def matrix
