@@ -7,7 +7,7 @@
 
 #pragma omp requires unified_shared_memory
 
-/// Dense matrix-vector product: y = A * x.
+// Dense matrix-vector product: y = A * x.
 void matvec(float *y, const float* A, const float *x, const int n) {
 #pragma omp target teams distribute parallel for
   for (int i = 0; i < n; i++) {
@@ -18,7 +18,15 @@ void matvec(float *y, const float* A, const float *x, const int n) {
   }
 }
 
-/// Dot product: result = sum(a[i] * b[i]).
+// AXPBY operation: y = alpha * x + beta * y.
+void axpby(float *y, const float *x, const float alpha, const float beta,
+           const int n) {
+#pragma omp target teams distribute parallel for
+  for (int i = 0; i < n; i++)
+    y[i] = alpha * x[i] + beta * y[i];
+}
+
+// Dot product: result = sum(a[i] * b[i]).
 float dot(const float *a, const float *b, const int n) {
   float sum = 0.0;
 #pragma omp target teams distribute parallel for reduction(+ : sum)
@@ -27,15 +35,7 @@ float dot(const float *a, const float *b, const int n) {
   return sum;
 }
 
-/// AXPBY operation: y = alpha * x + beta * y.
-void axpby(float *y, const float *x, const float alpha, const float beta,
-           const int n) {
-#pragma omp target teams distribute parallel for
-  for (int i = 0; i < n; i++)
-    y[i] = alpha * x[i] + beta * y[i];
-}
-
-/// Solve A*x = b using the conjugate gradient method.
+// Solve A*x = b using the conjugate gradient method.
 int cg_solve(float *x, const float *A, const float *b, const int n, const int max_iter) {
   float *r = new float[n];
   float *p = new float[n];

@@ -5,7 +5,7 @@
 #include "solver.hpp"
 #include "test.hpp"
 
-bool nearly_eql(float x, float y, float epsilon) {
+bool nearly_eql(real x, real y, real epsilon) {
   return std::fabs(x - y) < epsilon;
 }
 
@@ -13,14 +13,20 @@ bool nearly_eql(float x, float y, float epsilon) {
 bool test_matvec_identity() {
   const int n = 3;
 
-  float A[n * n] = {0};
+  real A[n * n] = {0};
   for (int i = 0; i < n; ++i) {
     A[idx(i, i, n)] = 1.0;
   }
-  float x[3] = {1.0, 2.0, 3.0};
-  float y[3];
+  real x[3] = {1.0, 2.0, 3.0};
+  real y[3];
 
-  matvec(y, A, x, n);
+#pragma omp target data map(to : A[0 : n * n], x[0 : n]) map(from : y[0 : n])
+  {
+#ifdef USE_DEVICE_ADDR
+#pragma omp target data use_device_addr(A, x, y)
+#endif
+    matvec(y, A, x, n);
+  }
 
   // Because A is the identity matrix, y and x should be identical
   bool passed = true;
@@ -35,20 +41,26 @@ bool test_matvec_simple() {
   const int n = 3;
 
   // Create a matrix with known values
-  float mat[9] = {-1, -6, 2, 4, 3, 10, 0, -100, 1};
+  real mat[9] = {-1, -6, 2, 4, 3, 10, 0, -100, 1};
 
   // x and y_soln are calculated solutions to y = Ax.
-  float x[3] = {-1.0, 2.0, 0.0};
+  real x[3] = {-1.0, 2.0, 0.0};
 
   // mat * x =
   // -1*-1 + -6*2 +  2*0 =  -11
   //  4*-1 +  3*2 + 10*0 =    2
   //  0*-1 + -100*2 + 1*0 = -200
-  float y_soln[3] = {-11, 2, -200};
+  real y_soln[3] = {-11, 2, -200};
 
   // Calculate y with our matvec test
-  float y[3];
-  matvec(y, mat, x, n);
+  real y[3];
+#pragma omp target data map(to : mat[0 : n * n], x[0 : n]) map(from : y[0 : n])
+  {
+#ifdef USE_DEVICE_ADDR
+#pragma omp target data use_device_addr(mat, x, y)
+#endif
+    matvec(y, mat, x, n);
+  }
 
   // Compare y to y_soln
   bool passed = true;
@@ -63,17 +75,26 @@ bool test_dot() {
   const int n = 1024;
 
   // Generate x and y and calculate their dot product in this loop
-  auto x = std::vector<float>(n);
-  auto y = std::vector<float>(n);
-  float soln = 0.0;
+  auto x = std::vector<real>(n);
+  auto y = std::vector<real>(n);
+  real soln = 0.0;
   for (int i = 0; i < n; ++i) {
-    const float p = float(i) / float(n);
+    const real p = real(i) / real(n);
     x[i] = p;
     y[i] = p;
     soln += p * p;
   }
 
   // Calculate dot with the function and test against above value
-  const float res = dot(x.data(), y.data(), n);
+  const real *xp = x.data();
+  const real *yp = y.data();
+  real res;
+#pragma omp target data map(to : xp[0 : n], yp[0 : n])
+  {
+#ifdef USE_DEVICE_ADDR
+#pragma omp target data use_device_addr(xp, yp)
+#endif
+    res = dot(xp, yp, n);
+  }
   return nearly_eql(res, soln, 1e-3);
 }

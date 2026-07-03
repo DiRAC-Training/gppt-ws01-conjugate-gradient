@@ -13,76 +13,63 @@ struct CublasHandle {
 };
 static CublasHandle cublas;
 
-/// Dense matrix-vector product kernel: y = A * x. One thread per row.
-__global__ void matvec_kernel(float *y, const float *A, const float *x,
-                              int n) {
-  int tid = blockIdx.x * blockDim.x + threadIdx.x;
-  int num_threads = blockDim.x * gridDim.x;
-  while (tid < n) {
-    float sum = 0.0;
-    for (int j = 0; j < n; j++) {
-      sum += A[tid * n + j] * x[j];
-    }
-    y[tid] = sum;
-    tid += num_threads;
+// CUDA kernels
+
+__global__ void matvec_kernel(float *y, const float *matrix_data,
+                              const float *x, int n) {
+  int i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i < n) {
+    // TODO (exercise step 2):
+    //     compute y[i] = sum over j of vals[i * n + j] * x[j]
   }
 }
 
-/// AXPBY kernel: y = alpha * x + beta * y. One thread per element.
 __global__ void axpby_kernel(float *y, const float *x, float alpha, float beta,
                              int n) {
-  int tid = blockIdx.x * blockDim.x + threadIdx.x;
-  int num_threads = blockDim.x * gridDim.x;
-  while (tid < n) {
-    y[tid] = alpha * x[tid] + beta * y[tid];
-    tid += num_threads;
-  }
+  // TODO (exercise step 3):
+  //     one thread per element; compute y[i] = alpha * x[i] + beta * y[i]
 }
 
-static const int BLOCK_SIZE = 1024;
+static const int BLOCK_SIZE = 256;
 
+// Once matvec_kernel has been implemented above, this launcher
+// will run on the GPU with no further changes needed.
 void matvec(float *y, const float *A, const float *x, const int n) {
-  // int grid = (n + BLOCK_SIZE - 1) / BLOCK_SIZE;
-  matvec_kernel<<<32, BLOCK_SIZE>>>(y, A, x, n);
+  int grid = (n + BLOCK_SIZE - 1) / BLOCK_SIZE;
+  matvec_kernel<<<grid, BLOCK_SIZE>>>(y, A, x, n);
   cudaDeviceSynchronize();
 }
 
+// TODO (exercise step 3): replace the CPU fallback below with a launch of
+// axpby_kernel, following the same pattern as matvec() above. The fallback
+// is only here so that intermediate builds (after porting matvec in step 2
+// but before porting axpby) still produce correct answers; it relies on x
+// and y being in managed memory, which you arranged in step 1.
 void axpby(float *y, const float *x, const float alpha, const float beta,
            const int n) {
-  // int grid = (n + BLOCK_SIZE - 1) / BLOCK_SIZE;
-  axpby_kernel<<<32, BLOCK_SIZE>>>(y, x, alpha, beta, n);
-  cudaDeviceSynchronize();
+  for (int i = 0; i < n; i++)
+    y[i] = alpha * x[i] + beta * y[i];
 }
 
-// Provided function - no need to port
+// Provided: dot product via cuBLAS. Do not modify.
 float dot(const float *a, const float *b, const int n) {
   float result = 0.0f;
   cublasSdot(cublas.handle, n, a, 1, b, 1, &result);
   return result;
 }
 
-/**
- * @brief Solve A*x = b using the unpreconditioned conjugate gradient method.
- *
- * The CG iteration runs on the host. Each linear algebra operation is
- * a CUDA kernel launch. All vectors use managed memory so no explicit
- * data movement is required.
- *
- * @return Number of iterations performed.
- */
+// Solve A*x = b using the conjugate gradient method.
 int cg_solve(float *x, const float *A, const float *b, const int n,
-             const int max_iter) {
-  float *r, *p, *A_times_p;
-  cudaMallocManaged(&r, n * sizeof(float));
-  cudaMallocManaged(&p, n * sizeof(float));
-  cudaMallocManaged(&A_times_p, n * sizeof(float));
+             const int max_iter, const float tol) {
+  // TODO (exercise step 1): convert these allocations to cudaMallocManaged
+  float *r = new float[n];
+  float *p = new float[n];
+  float *A_times_p = new float[n];
 
   // Step 1: r_0 = f - K*x_0
   matvec(r, A, x, n);
-  axpby(r, b, 1.0, -1.0, n);
-  // for (int i = 0; i < n; i++) {
-  //   r[i] = b[i] - r[i];
-  // }
+  for (int i = 0; i < n; i++)
+    r[i] = b[i] - r[i];
 
   // Step 2: p_0 = r_0
   std::memcpy(p, r, n * sizeof(float));
@@ -101,6 +88,7 @@ int cg_solve(float *x, const float *A, const float *b, const int n,
     // Step 3c: r_{k+1} = r_k - alpha_k * K*p_k
     axpby(r, A_times_p, -alpha, 1.0, n);
 
+    // Step 3d: convergence check -- stop if ||r_{k+1}|| < tol
     float residual_sq_new = dot(r, r, n);
 
     // This method is so good it crashes if the residual gets too small!
@@ -112,14 +100,16 @@ int cg_solve(float *x, const float *A, const float *b, const int n,
     float beta = residual_sq_new / residual_sq_old;
     axpby(p, r, 1.0, beta, n);
 
-    std::printf("%d: r = %.6e\n", n_iter, residual_sq_new);
+    if (n_iter % 50 == 0)
+      std::printf("%d: r = %.6e\n", n_iter, residual_sq_new);
 
     residual_sq_old = residual_sq_new;
   }
 
-  cudaFree(r);
-  cudaFree(p);
-  cudaFree(A_times_p);
+  // TODO (exercise step 1): convert these deallocations to cudaFree
+  delete[] r;
+  delete[] p;
+  delete[] A_times_p;
 
   return n_iter;
 }
