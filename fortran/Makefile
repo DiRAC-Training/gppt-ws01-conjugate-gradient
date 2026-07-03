@@ -1,11 +1,11 @@
-FC ?= flang
+FC = flang
 FCFLAGS = -O3 -fopenmp -march=native
-OFFLOAD = --offload-arch=sm_70
+OFFLOAD = --offload-arch=sm_80
 OMP50   = -fopenmp-version=50
 
 # cuBLAS ships in the NVHPC SDK; override on the command line if paths differ.
-CUBLAS_LIB ?= /opt/nvidia/hpc_sdk/Linux_x86_64/25.7/math_libs/lib64
-CUDA_LIB   ?= /opt/nvidia/hpc_sdk/Linux_x86_64/25.7/cuda/lib64
+CUBLAS_LIB ?= $(CUDA_PATH)/math_libs/lib64
+CUDA_LIB   ?= $(CUDA_PATH)/cuda/lib64
 
 BUILD_DIR = build
 
@@ -39,9 +39,9 @@ cublas_sym: EXTRA_LINK = -L$(CUBLAS_LIB) -Wl,-rpath,$(CUBLAS_LIB) -lcublas \
                          -L$(CUDA_LIB) -Wl,-rpath,$(CUDA_LIB) -lcudart
 
 .DEFAULT_GOAL := cpu
-.PHONY: cpu gpu gpu_cm cublas cublas_sym program clean
+.PHONY: cpu gpu cublas cublas_sym program clean
 
-cpu gpu gpu_cm cublas cublas_sym: program
+cpu gpu cublas cublas_sym: program
 
 program: | $(BUILD_DIR)
 	$(FC) $(FCFLAGS) -J$(BUILD_DIR) -c precision.f90 -o $(BUILD_DIR)/precision.o
