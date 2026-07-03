@@ -13,6 +13,10 @@ using std::chrono::high_resolution_clock;
 const bool RANDOMISE_SEED = true;
 // const bool RANDOMISE_SEED = false;
 
+// Diagonal shift to make the matrix positive definite. DIAG_SCALE > 0 uses
+// f*sqrt(n) (barely SPD, ill-conditioned => more iterations); otherwise n/32.
+const real DIAG_SCALE = -1.0;
+
 static std::mt19937 rng;
 
 /// Create a rng
@@ -26,7 +30,7 @@ void init_rng(bool randomise) {
 }
 
 /// Generate b from Ax = b
-void calc_b(float *b, const float *A, const float *x, const int n) {
+void calc_b(real *b, const real *A, const real *x, const int n) {
 #pragma omp parallel for
   for (int i = 0; i < n; ++i) {
     b[i] = 0.0;
@@ -38,18 +42,18 @@ void calc_b(float *b, const float *A, const float *x, const int n) {
 }
 
 /// Fill x with random values in [min, max)
-void fill_rand_vec(float *x, int size, float min, float max) {
-  std::uniform_real_distribution<float> dist(min, max);
+void fill_rand_vec(real *x, int size, real min, real max) {
+  std::uniform_real_distribution<real> dist(min, max);
   for (int i = 0; i < size; ++i) {
     x[i] = dist(rng);
   }
 }
 
 /// Create a random, positive-definite matrix
-void generate_positive_definite(float *A, int n) {
+void generate_positive_definite(real *A, int n) {
   std::cout << "Generating matrix\n";
   // Create a totally random matrix
-  auto B = std::vector<float>(n * n);
+  auto B = std::vector<real>(n * n);
   fill_rand_vec(B.data(), n * n, 0.0, 1.0);
 
 // Make a symmetric matrix
@@ -60,11 +64,11 @@ void generate_positive_definite(float *A, int n) {
     }
   }
 
-  // Add n * identity to make diagonally dominant => positive definite
-  for (int i = 0; i < n; ++i) {
-    A[idx(i, i, n)] += fmax(float(n) / 32, 1.0);
-    // A[idx(i, i, n)] += 0.42 * std::sqrt(float(n));
-  }
+  // DIAG_SCALE > 0 uses f*sqrt(n) (barely SPD, ill-conditioned); otherwise n/32.
+  real diag_shift =
+      DIAG_SCALE > 0 ? DIAG_SCALE * std::sqrt(real(n)) : fmax(real(n) / 32, 1.0);
+  for (int i = 0; i < n; ++i)
+    A[idx(i, i, n)] += diag_shift;
 }
 
 bool run_tests() {
@@ -98,10 +102,10 @@ int main() {
   // const int n = 32000;
   // const int cg_max_iter = 320;
 
-  float *A = new float[n * n]; // note n*n
-  float *x_soln = new float[n];
-  float *b = new float[n];
-  float *x = new float[n];
+  real *A = new real[n * n]; // note n*n
+  real *x_soln = new real[n];
+  real *b = new real[n];
+  real *x = new real[n];
 
   init_rng(RANDOMISE_SEED);
 
@@ -115,17 +119,26 @@ int main() {
   std::fill(x, x + n, 0.0);
 
   // Solve
-  auto start = high_resolution_clock::now();
-  int iters = cg_solve(x, A, b, n, cg_max_iter);
-  auto stop = high_resolution_clock::now();
-  auto duration =
-      duration_cast<std::chrono::microseconds>(stop - start).count();
+#pragma omp target data map(to : A[0 : n * n], b[0 : n]) map(tofrom : x[0 : n])
+  {
+    auto start = high_resolution_clock::now();
+    int iters;
+#ifdef USE_DEVICE_ADDR
+    // The CUDA solver needs device addresses for the OMP-mapped A, b, x.
+#pragma omp target data use_device_addr(A, b, x)
+#endif
+    iters = cg_solve(x, A, b, n, cg_max_iter);
+    auto stop = high_resolution_clock::now();
+    auto duration =
+        duration_cast<std::chrono::microseconds>(stop - start).count();
 
-  std::cout << "Performed " << iters << " iterations" << std::endl;
-  std::cout << "Solve time: " << duration << " us" << std::endl;
-  std::cout << "Time per iteration: " << duration / iters << " us" << std::endl;
+    std::cout << "Performed " << iters << " iterations" << std::endl;
+    std::cout << "Solve time: " << duration << " us" << std::endl;
+    std::cout << "Time per iteration: " << duration / iters << " us"
+              << std::endl;
+  }
 
-  float av_error2 = 0.0;
+  real av_error2 = 0.0;
   for (int i = 0; i < n; ++i) {
     av_error2 += std::fabs(x_soln[i] - x[i]);
   }
