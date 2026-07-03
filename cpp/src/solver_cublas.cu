@@ -41,9 +41,9 @@ float dot(const float *a, const float *b, const int n) {
 int cg_solve(float *x, const float *A, const float *b, const int n,
              const int max_iter) {
   float *r, *p, *A_times_p;
-  cudaMallocManaged(&r, n * sizeof(float));
-  cudaMallocManaged(&p, n * sizeof(float));
-  cudaMallocManaged(&A_times_p, n * sizeof(float));
+  cudaMalloc(&r, n * sizeof(float));
+  cudaMalloc(&p, n * sizeof(float));
+  cudaMalloc(&A_times_p, n * sizeof(float));
 
   // Step 1: r_0 = f - K*x_0
   matvec(r, A, x, n);
