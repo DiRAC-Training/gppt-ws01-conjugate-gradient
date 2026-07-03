@@ -22,6 +22,9 @@ cpu:        BIN    = conj_grad
 gpu:        SOLVER = solver_gpu.f90
 gpu:        BIN    = conj_grad_gpu
 gpu:        FCFLAGS += $(OFFLOAD)
+gpu_cm:     SOLVER = solver_gpu_cm.f90
+gpu_cm:     BIN    = conj_grad_gpu_cm
+gpu_cm:     FCFLAGS += $(OFFLOAD)
 cublas:     SOLVER = solver_cublas.f90
 cublas:     BIN    = conj_grad_cublas
 cublas:     FCFLAGS += $(OFFLOAD) $(OMP50)
@@ -36,9 +39,9 @@ cublas_sym: EXTRA_LINK = -L$(CUBLAS_LIB) -Wl,-rpath,$(CUBLAS_LIB) -lcublas \
                          -L$(CUDA_LIB) -Wl,-rpath,$(CUDA_LIB) -lcudart
 
 .DEFAULT_GOAL := cpu
-.PHONY: cpu gpu cublas cublas_sym program clean
+.PHONY: cpu gpu gpu_cm cublas cublas_sym program clean
 
-cpu gpu cublas cublas_sym: program
+cpu gpu gpu_cm cublas cublas_sym: program
 
 program: | $(BUILD_DIR)
 	$(FC) $(FCFLAGS) -J$(BUILD_DIR) -c precision.f90 -o $(BUILD_DIR)/precision.o
