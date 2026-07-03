@@ -4,7 +4,7 @@ LDFLAGS = -fopenmp
 
 # GPU compute capability: 70 = Volta (TitanV), 80 = Ampere (A100).
 ARCH = 80
-# Host compiler for nvcc (e.g. g++, gcc-14). Empty = nvcc's default.
+# Host compiler for nvcc (e.g. gcc-14). Empty = nvcc's default.
 NVCC_CCBIN =
 # Unified (managed) memory for the OpenMP-offload builds; set empty to disable.
 GPU_MEM = # -gpu=mem:unified
