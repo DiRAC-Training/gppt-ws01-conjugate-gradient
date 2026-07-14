@@ -3,6 +3,8 @@
 #include <iostream>
 #include <random>
 
+#include <cuda_runtime.h>
+
 #include "idx.hpp"
 #include "solver.hpp"
 #include "test.hpp"
@@ -103,13 +105,15 @@ int main() {
   const int n = 8192;
   const int cg_max_iter = 32;
 
-  // TODO (exercise step 1): convert these allocations to cudaMallocManaged
-  // Note: not all these allocations need to be converted.
-  // You should follow where the pointers are used to figure out which could be passed to kernels and so need to be converted.
-  real *A = new real[n * n]; // note n*n
+  real *A = nullptr;
+  cudaMallocManaged(&A, n * n * sizeof(real));
+  real *b = nullptr;
+  cudaMallocManaged(&b, n * sizeof(real));
+  real *x = nullptr;
+  cudaMallocManaged(&x, n * sizeof(real));
+
+  // This doesn't ever need to go on the GPU
   real *x_soln = new real[n];
-  real *b = new real[n];
-  real *x = new real[n];
 
   init_rng(RANDOMISE_SEED);
 
@@ -143,10 +147,11 @@ int main() {
 
   std::cout << "Average error = " << std::sqrt(av_error2) << "\n";
 
-  delete[] A;
+  cudaFree(x);
+  cudaFree(b);
+  cudaFree(A);
+
   delete[] x_soln;
-  delete[] b;
-  delete[] x;
 
   return 0;
 }

@@ -1,8 +1,8 @@
 #include <cstdio>
 #include <cstring>
 #include <limits>
-#include <vector>
 
+#include "precision.hpp"
 #include "solver.hpp"
 #include "idx.hpp"
 
