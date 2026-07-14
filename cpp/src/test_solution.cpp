@@ -52,6 +52,11 @@ bool test_matvec_identity() {
 }
 
 bool test_matvec_simple() {
+  // One solution assumes a *symmetric* matrix, so we need to be able to turn this non-symmetric test off
+#ifdef DISABLE_MATVEC_SIMPLE_TEST
+  return true;
+#endif
+
   const int n = 3;
 
   real *A = nullptr;
