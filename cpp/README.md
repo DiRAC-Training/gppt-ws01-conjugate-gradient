@@ -4,9 +4,9 @@ In this exercise you will be guided through the porting of a conjugate gradient 
 
 ## The problem
 
-The conjugate gradient finds the solution $x$ to the matrix equation $A\vec{x} = \vec{b}$ for a given matrix $A$ and vector $b$[^pos_def]. In our code we will be randomly generating both $A$ and $x$, calculating $b$, then using our algorithm to come up with the (known) solution $x$.
+The conjugate gradient (CG) finds the solution $x$ to the matrix equation $A\vec{x} = \vec{b}$ for a given matrix $A$ and vector $b$[^pos_def]. In our code we will be randomly generating both $A$ and $x$, calculating $b$, then using our algorithm to come up with the (known) solution $x$.
 
-[^pos_def]: For the CG algorithm to work it must be *positive-definite* and *diagonally dominant* which we ensure with the particular way the matrix is randomly generated.
+[^pos_def]: For the CG algorithm to work it must be *positive-definite* and *diagonally dominant*. In this code, the matrix is generated so that it has both these properties.
 
 The **conjugate gradient (CG)** method is found in `solver.cpp`. This is the part of the code you will port. The CG loop itself runs on the host; each iteration calls three linear algebra routines, and these are what we will move onto the GPU:
 
@@ -21,23 +21,22 @@ Makefile
 include          // You will probably not touch these
 ├── idx.hpp
 ├── solver.hpp
+├── precision.hpp
 └── test.hpp
 src
 ├── main.cpp
-├── solver.cpp   // START HERE FOR OPENMP (also sample CPU version)
-├── solver.cu    // START HERE FOR CUDA
-├── test.cpp
-├── solver_cuda_solution.cu
-├── solver_openmp_solution.cpp
-└── solver_openmp_unmanaged_solution.cpp
+├── solver_FIXME.cu    // START HERE FOR CUDA
+└── test.cpp
 ```
+
+Also in `src` is a number of solutions 
 
 ## Running the baseline
 
 Build and run the CPU version first so you have a reference for correctness and timing:
 
 ```bash
-make && build/conj_grad
+make && build/cpu
 ```
 
 You should see output like:
@@ -61,72 +60,13 @@ Time per iteration: 3811 us
 Average error = 0.000652638
 ```
 
-Take note of the **time per iteration** for this CPU version. This is ultimately what you are trying to improve in the GPU port.
+Take note of the **time per iteration** for this CPU version reported here in microseconds. This is ultimately what you are trying to improve in the GPU port.
 
-## Choose your porting route
+## The porting task
 
-You now have a choice of two porting routes. Pick **one** and work through it end-to-end:
+You will rewrite each operation as a CUDA kernel (i.e. a function marked with `__global__`) and manage memory through the CUDA runtime. You will port the kernels one at a time and test after each. Even though the performance of each operation will increase during this process, **you should not expect to see a speedup until all three kernels are on the GPU**. With managed memory, if even one kernel still runs on the host, the data will migrate back and forth between host and device on every CG iteration, and that migration cost will dominate the solve time. Early intermediate builds will often be *slower* than the CPU baseline. This is expected.
 
-- **Route A — OpenMP target offload.** You stay in `solver.cpp` and add directives to each kernel to offload it to the GPU. This is a good starting point if you are already comfortable with OpenMP and less interested in CUDA.
-- **Route B — CUDA.** You rewrite each kernel as an explicit CUDA `__global__` function and manage memory through the CUDA runtime. More verbose, but gives you finer control and is closer to what a CUDA port looks like. Suitable for thoes already familiar with OpenMP offloading and wanting more of a challenge.
-
-Both routes assume **managed memory** throughout (`#pragma omp requires unified_shared_memory` / `cudaMallocManaged`). This avoids explicit host/device copies at this stage; the consequences of that choice, and how to manage memory explicitly, are discussed in later modules.
-
-In both routes you will port the kernels one at a time and test after each. An important thing to understand up front is that **you should not expect to see a speedup until all three kernels are on the GPU**. With managed memory, if even one kernel still runs on the host, the data will migrate back and forth between host and device on every CG iteration, and that migration cost will dominate the solve time. Early intermediate builds will often be *slower* than the CPU baseline. This is expected.
-
-### Before you start: pick the right Makefile
-
-The default `Makefile` builds the CPU baseline. Two alternatives are provided for the GPU routes. Copy the one matching your chosen route over the top of `Makefile`:
-
-```bash
-# Route A (OpenMP target offload)
-cp Makefile_omp Makefile
-
-# Route B (CUDA)
-cp Makefile_cuda Makefile
-```
-
-We will learn how to adapt the build configurations to compile the code for either CPU or GPU in the [Architecture 1 module](TODO: link to module). For now, the important things to note are:
-
----
-
-## Route A — OpenMP target offload
-
-You will work entirely inside `solver.cpp`. No new files.
-
-### Step 1: Declare unified shared memory
-
-At the top of `solver.cpp`, after the `#include`s, add:
-
-```cpp
-#pragma omp requires unified_shared_memory
-```
-
-This tells the OpenMP runtime that host and device share a single address space, so pointers allocated on the host with `new` can be dereferenced from inside `target` regions without explicit `map` clauses.
-
-### Step 2: Offload `matvec`
-
-Find the `matvec` function. Replace the `#pragma omp parallel for` with a target-offload directive that distributes the outer loop across teams and threads on the GPU.
-
-**Hint:** the directive you need is `#pragma omp target teams distribute parallel for`. You may also need a local pointer to the raw matrix storage (`A.vals`) captured by the target region — accessing `A(i, j)` through the `DenseMatrix` struct from inside a target region can be awkward.
-
-**Test.** Rebuild and run. The correctness check should still pass. The solve time will likely be **much worse** than the CPU baseline at this point, because `dot` and `axpby` still run on the host and force data to migrate back every iteration.
-
-### Step 3: Offload `axpby`
-
-Apply the same pattern to `axpby`. It is a straightforward element-wise update with no reduction. Test again — correctness should still hold, performance is still expected to be poor.
-
-### Step 4: Offload `dot`
-
-`dot` is different: it contains a **reduction**. The OpenMP `reduction` clause that you use on the CPU (`reduction(+ : sum)`) also works with `target teams distribute parallel for`. Add it to the directive.
-
-**Test.** Now that all three kernels run on the GPU, managed memory should keep the vectors resident on the device across iterations. You should see a meaningful speedup over the CPU baseline.
-
----
-
-## Route B — CUDA
-
-A starter `solver.cu` is provided alongside `solver.cpp`. You will work in `solver.cu` for the ported linear algebra routines, and switch a few allocations to `cudaMallocManaged` throughout the code so that host-assembled data is visible to the GPU kernels.
+A starter `solver_FIXME.cu` is provided alongside `solver.cpp`. You will work in `solver_FIXME.cu` for the ported linear algebra routines, and switch a few allocations to `cudaMallocManaged` throughout the code so that host-assembled data is visible to the GPU kernels.
 
 The starter file already contains the scaffold for you:
 
@@ -137,9 +77,9 @@ The starter file already contains the scaffold for you:
 
 ### Step 1: Switch allocations to managed memory
 
-CUDA kernels need their input pointers to refer to device-accessible memory. The simplest way to arrange this, without rewriting the assembly code that runs on the host, is to allocate everything with `cudaMallocManaged`. Managed memory is accessible from both host and device through the same pointer, and the CUDA runtime migrates pages between the two as needed.
+CUDA kernels act only on GPU memory but we can skip the manual process of allocating and transferring *GPU* memory by instead allocating *host* memory as *managed memory*. In doing this we potentially sacrifice some performance. Managed memory is allocated with `cudaMallocManaged` and is accessible from both host and device through the same pointer. The CUDA runtime migrates data between the two when the data is accessed.
 
-The pattern is:
+Regular pointers allocated and deallocated through `new` and `delete` are converted as:
 
 ```cpp
 // Before:
@@ -154,41 +94,20 @@ cudaMallocManaged(&v, n * sizeof(float));
 cudaFree(v);
 ```
 
+The allocations that need converted are noted in the code with the comment `TODO (exercise step 1)`. For this step, look where the relevant arrays are defined near the start of `main` in `main.cpp` and at the start of `cg_solve` in `solver_todo.cu`
+
 The following allocations need to be converted. They are the buffers that are touched by **both** the host (during assembly / the CG loop control flow) and the GPU kernels:
 
 | File         | Allocation(s) |
 |--------------|---------------|
 | `main.cpp`   | `rhs`, `temperature` |
-| `solver.cu`  | `r`, `p`, `A_times_p` (inside `cg_solve`) |
-| `utils.hpp`  | `DenseMatrix::allocate` — the `vals` array |
+| `solver_FIXME.cu`  | `r`, `p`, `A_times_p` (inside `cg_solve`) |
 
-Remember to switch the corresponding `delete[]`s to `cudaFree` (including in `DenseMatrix::free`).
-
-**Leave `bc_vals` in `utils.cpp` alone.** It is a host-only temporary used during boundary condition application and is never touched by a GPU kernel.
+Remember to switch the corresponding `delete[]`s to `cudaFree`.
 
 ### Step 2: Port `matvec`
 
-Open `solver.cu` and fill in the body of `matvec_kernel`. The natural parallelisation is one thread per row of $K$. Each thread computes its row's dot product against $\mathbf{x}$ and writes the result into $\mathbf{y}$.
-
-```cpp
-__global__ void matvec_kernel(const float *vals, const float *x, float *y, int n) {
-    int i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i < n) {
-        // TODO: compute y[i] = sum over j of vals[i*n + j] * x[j]
-    }
-}
-```
-
-The launcher is provided for you:
-
-```cpp
-void matvec(const DenseMatrix &A, const float *x, float *y) {
-    int n    = A.size;
-    int grid = (n + BLOCK_SIZE - 1) / BLOCK_SIZE;
-    matvec_kernel<<<grid, BLOCK_SIZE>>>(A.vals, x, y, n);
-    cudaDeviceSynchronize();
-}
-```
+Open `solver_FIXME.cu` and fill in the body of `matvec_kernel`. The natural parallelisation is one thread per row of $K$. Each thread should compute its row's dot product against the vector `x` and write the result into `y`.
 
 `BLOCK_SIZE` is defined at the top of the file (256 is a sensible default for this kernel); the grid is sized so there are at least `n` threads in total. The `cudaDeviceSynchronize` ensures the kernel has finished before the host touches the output — you will want it in every launcher while porting, so that any error or correctness problem shows up immediately at the call site rather than somewhere later.
 

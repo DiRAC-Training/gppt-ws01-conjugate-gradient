@@ -18,7 +18,7 @@ const bool STOP_AFTER_TESTS = false;
 
 // Diagonal shift to make the matrix positive definite. DIAG_SCALE > 0 uses
 // f*sqrt(n) (barely SPD, ill-conditioned => more iterations); otherwise n/32.
-const real DIAG_SCALE = -1.0;
+const real DIAG_SCALE = 0.42;
 
 static std::mt19937 rng;
 

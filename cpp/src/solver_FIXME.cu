@@ -5,6 +5,10 @@
 
 #include "solver.hpp"
 
+#ifndef BLOCK_SIZE
+#define BLOCK_SIZE 128
+#endif
+
 // Wrapper struct providing a cuBLAS handle with automatic setup and teardown.
 struct CublasHandle {
   cublasHandle_t handle;
@@ -29,8 +33,6 @@ __global__ void axpby_kernel(real *y, const real *x, real alpha, real beta,
   // TODO (exercise step 3):
   //     one thread per element; compute y[i] = alpha * x[i] + beta * y[i]
 }
-
-#define BLOCK_SIZE 128
 
 // Once matvec_kernel has been implemented above, this launcher
 // will run on the GPU with no further changes needed.

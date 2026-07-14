@@ -4,6 +4,10 @@
 
 #include "solver.hpp"
 
+#ifndef BLOCK_SIZE
+#define BLOCK_SIZE 128
+#endif
+
 // Wrapper struct providing a cuBLAS handle with automatic setup and teardown.
 struct CublasHandle {
   cublasHandle_t handle;
@@ -33,8 +37,6 @@ __global__ void axpby_kernel(float *y, const float *x, float alpha, float beta,
   if (i < n)
     y[i] = alpha * x[i] + beta * y[i];
 }
-
-#define BLOCK_SIZE 128
 
 void matvec(float *y, const float *A, const float *x, const int n) {
   int grid = (n + BLOCK_SIZE - 1) / BLOCK_SIZE; // one thread per row

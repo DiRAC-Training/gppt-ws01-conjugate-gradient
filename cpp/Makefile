@@ -4,6 +4,11 @@ HEADERS = $(wildcard include/*.hpp)
 
 .PHONY: cpu cuda cuda_optimised cublas cublas_sym clean fmt
 
+BLOCK_SIZE ?= 128
+EXTRA_FLAGS="-DBLOCK_SIZE=$(BLOCK_SIZE)"
+
+all: cpu fixme
+
 build:
 	mkdir build
 
@@ -16,7 +21,10 @@ cpu: build/main.o build/test.o build/solver.o | build
 
 # .cu compilation
 build/%.o: src/%.cu $(HEADERS) build
-	nvcc -O3 -arch=native -Iinclude/ -c $< -o $@
+	nvcc -O3 -arch=native -Iinclude/ $(EXTRA_FLAGS) -c $< -o $@
+
+fixme: build/solver_FIXME.o build/main_solution.o build/test_solution.o | build
+	$(CXX) -L"$(CUDA_PATH)/lib" -lcublas -lcudart $^ -o build/$@
 
 cuda: build/solver_cuda.o build/main_solution.o build/test_solution.o | build
 	$(CXX) -L"$(CUDA_PATH)/lib" -lcublas -lcudart $^ -o build/$@
