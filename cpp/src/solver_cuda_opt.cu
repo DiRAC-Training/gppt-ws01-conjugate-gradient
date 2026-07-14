@@ -18,14 +18,14 @@ static CublasHandle cublas;
 // Dense matrix-vector product kernel: y = A * x. One warp per row: the 32
 // lanes stream the row cooperatively so the global loads coalesce, then the
 // partial sums are combined with a warp-shuffle reduction.
-__global__ void matvec_kernel(float *y, const float *A, const float *x,
-                              int n) {
+__global__ void matvec_kernel(float *y, const float *A, const float *x, int n) {
   int row = (blockIdx.x * blockDim.x + threadIdx.x) / 32;
   int lane = threadIdx.x & 31;
   if (row >= n)
     return;
   float sum = 0.0;
-  for (int j = lane; j < n; j += 32) // lanes read A[row*n + j..j+31] -> coalesced
+  for (int j = lane; j < n;
+       j += 32) // lanes read A[row*n + j..j+31] -> coalesced
     sum += A[row * n + j] * x[j];
   for (int offset = 16; offset > 0; offset >>= 1) // warp-reduce the partials
     sum += __shfl_down_sync(0xffffffff, sum, offset);
@@ -41,7 +41,8 @@ __global__ void axpby_kernel(float *y, const float *x, float alpha, float beta,
     y[i] = alpha * x[i] + beta * y[i];
 }
 
-static const int BLOCK_SIZE = 128; // Tested on V100, requires  architecture-dependent tuning
+static const int BLOCK_SIZE =
+    128; // Tested on V100, requires  architecture-dependent tuning
 
 void matvec(float *y, const float *A, const float *x, const int n) {
   int grid = (n * 32 + BLOCK_SIZE - 1) / BLOCK_SIZE; // one warp per row

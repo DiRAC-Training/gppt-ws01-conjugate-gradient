@@ -1,12 +1,12 @@
-#include <cstdlib>
 #include <chrono>
+#include <cstdlib>
 #include <iostream>
 #include <random>
 
 #include "idx.hpp"
+#include "precision.hpp"
 #include "solver.hpp"
 #include "test.hpp"
-#include "precision.hpp"
 
 using std::chrono::duration_cast;
 using std::chrono::high_resolution_clock;
@@ -65,9 +65,10 @@ void generate_positive_definite(real *A, int n) {
     }
   }
 
-  // DIAG_SCALE > 0 uses f*sqrt(n) (barely SPD, ill-conditioned); otherwise n/32.
-  real diag_shift =
-      DIAG_SCALE > 0 ? DIAG_SCALE * std::sqrt(real(n)) : fmax(real(n) / 32, 1.0);
+  // DIAG_SCALE > 0 uses f*sqrt(n) (barely SPD, ill-conditioned); otherwise
+  // n/32.
+  real diag_shift = DIAG_SCALE > 0 ? DIAG_SCALE * std::sqrt(real(n))
+                                   : fmax(real(n) / 32, 1.0);
   for (int i = 0; i < n; ++i)
     A[idx(i, i, n)] += diag_shift;
 }
@@ -98,14 +99,16 @@ int main() {
     return -1;
   }
 
-  if(STOP_AFTER_TESTS) return 0;
+  if (STOP_AFTER_TESTS)
+    return 0;
 
   const int n = 8192;
   const int cg_max_iter = 32;
 
   // TODO (exercise step 1): convert these allocations to cudaMallocManaged
   // Note: not all these allocations need to be converted.
-  // You should follow where the pointers are used to figure out which could be passed to kernels and so need to be converted.
+  // You should follow where the pointers are used to figure out which could be
+  // passed to kernels and so need to be converted.
   real *A = new real[n * n]; // note n*n
   real *x_soln = new real[n];
   real *b = new real[n];
@@ -132,8 +135,7 @@ int main() {
 
   std::cout << "Performed " << iters << " iterations" << std::endl;
   std::cout << "Solve time: " << duration << " us" << std::endl;
-  std::cout << "Time per iteration: " << duration / iters << " us"
-            << std::endl;
+  std::cout << "Time per iteration: " << duration / iters << " us" << std::endl;
 
   real av_error2 = 0.0;
   for (int i = 0; i < n; ++i) {

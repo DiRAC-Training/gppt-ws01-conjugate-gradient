@@ -8,7 +8,7 @@
 #include "test.hpp"
 
 bool nearly_eql(real x, real y, real eps = 1e-6) {
-  if(std::fabs(x - y) < eps) {
+  if (std::fabs(x - y) < eps) {
     return true;
   } else {
     std::cout << x << " != " << y << "\n";
@@ -52,7 +52,8 @@ bool test_matvec_identity() {
 }
 
 bool test_matvec_simple() {
-  // One solution assumes a *symmetric* matrix, so we need to be able to turn this non-symmetric test off
+  // One solution assumes a *symmetric* matrix, so we need to be able to turn
+  // this non-symmetric test off
 #ifdef DISABLE_MATVEC_SIMPLE_TEST
   return true;
 #endif

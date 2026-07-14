@@ -7,7 +7,7 @@
 #include "test.hpp"
 
 bool nearly_eql(real x, real y, real eps = 1e-6) {
-  if(std::fabs(x - y) < eps) {
+  if (std::fabs(x - y) < eps) {
     return true;
   } else {
     std::cout << x << " != " << y << "\n";

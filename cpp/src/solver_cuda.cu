@@ -16,8 +16,7 @@ struct CublasHandle {
 static CublasHandle cublas;
 
 // Dense matrix-vector product kernel: y = A * x. One thread per row.
-__global__ void matvec_kernel(float *y, const float *A, const float *x,
-                              int n) {
+__global__ void matvec_kernel(float *y, const float *A, const float *x, int n) {
   int i = blockIdx.x * blockDim.x + threadIdx.x;
   if (i < n) {
     float sum = 0.0;
@@ -65,7 +64,8 @@ int cg_solve(float *x, const float *A, const float *b, const int n,
 
   // Step 1: r_0 = f - K*x_0
   matvec(r, A, x, n);
-  axpby(r, b, 1.0, -1.0, n); // replacing a hand-written kernel for r = b - r with axpby
+  axpby(r, b, 1.0, -1.0,
+        n); // replacing a hand-written kernel for r = b - r with axpby
   // for (int i = 0; i < n; i++) {
   //   r[i] = b[i] - r[i];
   // }

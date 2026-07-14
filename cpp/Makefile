@@ -2,10 +2,7 @@ CXX = nvc++
 
 HEADERS = $(wildcard include/*.hpp)
 
-.PHONY: cpu cuda cuda_optimised cublas cublas_sym clean
-
-clean:
-	rm -rf build
+.PHONY: cpu cuda cuda_optimised cublas cublas_sym clean fmt
 
 build:
 	mkdir build
@@ -33,3 +30,9 @@ cublas: build/solver_cublas.o build/main_solution.o build/test_solution.o | buil
 cublas_sym: EXTRA_FLAGS+=-DDISABLE_MATVEC_SIMPLE_TEST
 cublas_sym: build/solver_cublas_sym.o build/main_solution.o build/test_solution.o | build
 	$(CXX) -L"$(CUDA_PATH)/lib" -lcublas -lcudart $^ -o build/$@
+
+fmt:
+	clang-format --style=llvm -i src/*.cpp src/*.cu $(HEADERS)
+
+clean:
+	rm -rf build

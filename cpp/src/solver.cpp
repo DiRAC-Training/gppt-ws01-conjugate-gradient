@@ -2,17 +2,17 @@
 #include <cstring>
 #include <limits>
 
+#include "idx.hpp"
 #include "precision.hpp"
 #include "solver.hpp"
-#include "idx.hpp"
 
 // Dense matrix-vector product: y = A * x.
-void matvec(real *y, const real* A, const real *x, const int n) {
+void matvec(real *y, const real *A, const real *x, const int n) {
 #pragma omp parallel for
   for (int i = 0; i < n; i++) {
     real sum = 0.0;
     for (int j = 0; j < n; j++)
-      sum += A[idx(i,j,n)] * x[j];
+      sum += A[idx(i, j, n)] * x[j];
     y[i] = sum;
   }
 }
@@ -24,7 +24,7 @@ void axpby(real *y, const real *x, const real alpha, const real beta,
   for (int i = 0; i < n; i++)
     y[i] = alpha * x[i] + beta * y[i];
 }
- 
+
 // Dot product: result = sum(a[i] * b[i]).
 real dot(const real *a, const real *b, const int n) {
   real sum = 0.0;
@@ -35,7 +35,8 @@ real dot(const real *a, const real *b, const int n) {
 }
 
 // Solve A*x = b using the conjugate gradient method.
-int cg_solve(real *x, const real *A, const real *b, const int n, const int max_iter) {
+int cg_solve(real *x, const real *A, const real *b, const int n,
+             const int max_iter) {
   real *r = new real[n];
   real *p = new real[n];
   real *A_times_p = new real[n];
@@ -68,7 +69,8 @@ int cg_solve(real *x, const real *A, const real *b, const int n, const int max_i
     //          p_{k+1} = r_{k+1} + beta_k * p_k
     real residual_sq_new = dot(r, r, n);
     // This method is so good it crashes if the residual gets too small!
-    if(residual_sq_new < std::numeric_limits<real>().epsilon()) break;
+    if (residual_sq_new < std::numeric_limits<real>().epsilon())
+      break;
 
     real beta = residual_sq_new / residual_sq_old;
     axpby(p, r, 1.0, beta, n);
