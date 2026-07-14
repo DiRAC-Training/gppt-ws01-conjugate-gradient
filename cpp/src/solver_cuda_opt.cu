@@ -41,8 +41,7 @@ __global__ void axpby_kernel(float *y, const float *x, float alpha, float beta,
     y[i] = alpha * x[i] + beta * y[i];
 }
 
-static const int BLOCK_SIZE =
-    128; // Tested on V100, requires  architecture-dependent tuning
+#define BLOCK_SIZE 128
 
 void matvec(float *y, const float *A, const float *x, const int n) {
   int grid = (n * 32 + BLOCK_SIZE - 1) / BLOCK_SIZE; // one warp per row

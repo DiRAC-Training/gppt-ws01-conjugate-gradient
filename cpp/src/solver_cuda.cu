@@ -34,7 +34,7 @@ __global__ void axpby_kernel(float *y, const float *x, float alpha, float beta,
     y[i] = alpha * x[i] + beta * y[i];
 }
 
-static const int BLOCK_SIZE = 128;
+#define BLOCK_SIZE 128
 
 void matvec(float *y, const float *A, const float *x, const int n) {
   int grid = (n + BLOCK_SIZE - 1) / BLOCK_SIZE; // one thread per row
