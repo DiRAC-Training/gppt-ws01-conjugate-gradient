@@ -2,7 +2,10 @@ CXX = nvc++
 
 HEADERS = $(wildcard include/*.hpp)
 
-.PHONY: cpu
+.PHONY: cpu cuda cuda_optimised cublas cublas_sym clean
+
+clean:
+	rm -rf build
 
 build:
 	mkdir build
