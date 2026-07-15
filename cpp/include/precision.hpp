@@ -3,7 +3,7 @@
 #define SINGLE_PRECISION
 
 #ifdef SINGLE_PRECISION
-  using real = float;
+using real = float;
 #else
-  using real = double;
+using real = double;
 #endif

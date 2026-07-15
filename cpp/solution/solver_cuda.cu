@@ -55,11 +55,11 @@ void axpby(real *y, const real *x, const real alpha, const real beta,
 // Dot product: result = sum(a[i] * b[i]).
 real dot(const real *a, const real *b, const int n) {
   real result = 0.0f;
-  #ifdef SINGLE_PRECISION
+#ifdef SINGLE_PRECISION
   cublasSdot(cublas.handle, n, a, 1, b, 1, &result);
-  #else
+#else
   cublasDdot(cublas.handle, n, a, 1, b, 1, &result);
-  #endif
+#endif
   CHECK_LAST_CUDA_ERROR();
   return result;
 }
