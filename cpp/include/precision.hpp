@@ -1,3 +1,9 @@
 #pragma once
 
-using real = float; // switch float -> double for double precision
+#define SINGLE_PRECISION
+
+#ifdef SINGLE_PRECISION
+  using real = float;
+#else
+  using real = double;
+#endif

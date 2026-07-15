@@ -19,8 +19,8 @@ static CublasHandle cublas;
 
 // CUDA kernels
 
-__global__ void matvec_kernel(real *y, const real *matrix_data,
-                              const real *x, int n) {
+__global__ void matvec_kernel(real *y, const real *matrix_data, const real *x,
+                              int n) {
   int i = blockIdx.x * blockDim.x + threadIdx.x;
   if (i < n) {
     // TODO (exercise step 2):

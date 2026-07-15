@@ -52,19 +52,19 @@ bool test_matvec_identity() {
 }
 
 bool test_matvec_simple() {
-  // One solution assumes a *symmetric* matrix, so we need to be able to turn
-  // this non-symmetric test off
-#ifdef DISABLE_MATVEC_SIMPLE_TEST
-  return true;
-#endif
-
   const int n = 3;
 
   real *A = nullptr;
   cudaMallocManaged(&A, n * n * sizeof(real));
 
   // Create a matrix with known values
-  real A_in[9] = {-1, -6, 2, 4, 3, 10, 0, -100, 1};
+  // clang-format off
+  real A_in[9] = {
+    -1, 4, 0,
+    4, 3, -100,
+    0, -100, 1
+  };
+  // clang-format on
   std::copy(A_in, A_in + 9, A);
 
   // x and y_soln are calculated solutions to y = Ax.
@@ -73,11 +73,7 @@ bool test_matvec_simple() {
   real x_in[3] = {-1.0, 2.0, 0.0};
   std::copy(x_in, x_in + 3, x);
 
-  // A * x =
-  // -1*-1 + -6*2 +  2*0 =  -11
-  //  4*-1 +  3*2 + 10*0 =    2
-  //  0*-1 + -100*2 + 1*0 = -200
-  real y_soln[3] = {-11, 2, -200};
+  real y_soln[3] = {9, 2, -200};
 
   // Calculate y with our matvec test
   real *y = nullptr;

@@ -44,14 +44,13 @@ cuda_optimised: build/solution/solver_cuda_opt.o build/solution/main.o build/sol
 cublas: build/solution/solver_cublas.o build/solution/main.o build/solution/test.o | build
 	$(CXX) -L"$(CUDA_PATH)/lib" -lcublas -lcudart $^ -o build/$@
 
-cublas_sym: EXTRA_FLAGS+=-DDISABLE_MATVEC_SIMPLE_TEST
 cublas_sym: build/solution/solver_cublas_sym.o build/solution/main.o build/solution/test.o | build
 	$(CXX) -L"$(CUDA_PATH)/lib" -lcublas -lcudart $^ -o build/$@
 
 ## Utility
 
 fmt:
-	clang-format --style=llvm -i src/*.cpp src/*.cu $(HEADERS)
+	clang-format --style=llvm -i src/*.cpp src/*.cu solution/*.cpp solution/*.cu $(HEADERS)
 
 clean:
 	rm -rf build
