@@ -37,9 +37,10 @@ contains
     integer :: i
 
     ! Create a matrix with known values
-    mat = [-1.0, -6.0,   2.0,  &
-            4.0,  3.0,   10.0, &
-            0.0, -100.0, 1.0]
+    ! Assign via idx so the layout follows the solver (row- or column-major).
+    mat(idx(1, 1, n)) = -1.0_wp; mat(idx(1, 2, n)) = -6.0_wp;   mat(idx(1, 3, n)) =   2.0_wp
+    mat(idx(2, 1, n)) =  4.0_wp; mat(idx(2, 2, n)) =  3.0_wp;   mat(idx(2, 3, n)) =  10.0_wp
+    mat(idx(3, 1, n)) =  0.0_wp; mat(idx(3, 2, n)) = -100.0_wp; mat(idx(3, 3, n)) =   1.0_wp
     
     ! x and y_soln are calculated solutions to y = Ax.
     x = [-1.0, 2.0, 0.0]
