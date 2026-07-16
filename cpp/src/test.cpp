@@ -41,16 +41,17 @@ bool test_matvec_simple() {
   const int n = 3;
 
   // Create a matrix with known values
-  real A[9] = {-1, -6, 2, 4, 3, 10, 0, -100, 1};
+  // clang-format off
+  real A[9] = {
+    -1, 4, 0,
+    4, 3, -100,
+    0, -100, 1
+  };
+  // clang-format on
 
   // x and y_soln are calculated solutions to y = Ax.
   real x[3] = {-1.0, 2.0, 0.0};
-
-  // mat * x =
-  // -1*-1 + -6*2 +  2*0 =  -11
-  //  4*-1 +  3*2 + 10*0 =    2
-  //  0*-1 + -100*2 + 1*0 = -200
-  real y_soln[3] = {-11, 2, -200};
+  real y_soln[3] = {9, 2, -200};
 
   // Calculate y with our matvec test
   real y[3];
