@@ -1,5 +1,4 @@
 #include <chrono>
-#include <cstdlib>
 #include <iostream>
 #include <random>
 
@@ -8,104 +7,57 @@
 #include "solver.hpp"
 #include "test.hpp"
 
+#include "util.hpp"
+
 using std::chrono::duration_cast;
 using std::chrono::high_resolution_clock;
 
-const bool RANDOMISE_SEED = true;
-const bool STOP_AFTER_TESTS = false;
-
-// Diagonal shift to make the matrix positive definite. DIAG_SCALE > 0 uses
-// f*sqrt(n) (barely SPD, ill-conditioned => more iterations); otherwise n/32.
-const real DIAG_SCALE = -1.0;
-
 static std::mt19937 rng;
 
-/// Create a rng
-void init_rng(bool randomise) {
-  std::mt19937::result_type seed = 42;
-  if (randomise) {
+void calc_b(real *b, const real *A, const real *x, const int n);
+void fill_rand_vec(real *x, int size, real min, real max);
+void generate_positive_definite(real *A, int n, bool poorly_conditioned_matrix);
+bool all_tests_pass();
+
+int main(int argc, char *argv[]) {
+  // Parameters
+  const int seed_in = get_argval<int>(argv, argv + argc, "--seed", -1);
+  const uint n = get_argval<uint>(argv, argv + argc, "-n", 8192);
+  const uint cg_max_iter = get_argval<uint>(argv, argv + argc, "-cg_max_iter", 32);
+  const bool well_conditioned = get_arg(argv, argv + argc, "--well_conditioned");
+  const bool disable_unit_tests =
+      get_arg(argv, argv + argc, "--disable_unit_tests");
+  const bool only_unit_tests = get_arg(argv, argv + argc, "--only_unit_tests");
+
+  // Check tests
+  bool tests_passed = true;
+  if (!disable_unit_tests) {
+    tests_passed = all_tests_pass();
+    if (!tests_passed)
+      return -1;
+
+    if (tests_passed && only_unit_tests) {
+      std::cout << "All tests passed!\n";
+      return 0;
+    }
+  }
+
+  std::cout << "\n";
+  std::cout << "Matrix size: " << n << " x " << n << "\n";
+  std::cout << "Max iterations: " << cg_max_iter << "\n";
+
+  std::mt19937::result_type seed = 0;
+  if(seed_in == -1) {
+    std::cout << "Generating random seed\n";
     seed = static_cast<std::mt19937::result_type>(
         std::chrono::system_clock::now().time_since_epoch().count());
+  } else {
+    seed = seed_in;
   }
+  std::cout << "Using RNG seed: " << seed << "\n";
   rng.seed(seed);
-}
 
-/// Generate b from Ax = b
-void calc_b(real *b, const real *A, const real *x, const int n) {
-#pragma omp parallel for
-  for (int i = 0; i < n; ++i) {
-    b[i] = 0.0;
-
-    for (int j = 0; j < n; ++j) {
-      b[i] += A[idx(i, j, n)] * x[j];
-    }
-  }
-}
-
-/// Fill x with random values in [min, max)
-void fill_rand_vec(real *x, int size, real min, real max) {
-  std::uniform_real_distribution<real> dist(min, max);
-  for (int i = 0; i < size; ++i) {
-    x[i] = dist(rng);
-  }
-}
-
-/// Create a random, positive-definite matrix
-void generate_positive_definite(real *A, int n) {
-  std::cout << "Generating matrix\n";
-  // Create a totally random matrix
-  auto B = std::vector<real>(n * n);
-  fill_rand_vec(B.data(), n * n, 0.0, 1.0);
-
-// Make a symmetric matrix
-#pragma omp parallel for
-  for (int i = 0; i < n; ++i) {
-    for (int j = 0; j < n; ++j) {
-      A[idx(i, j, n)] = (B[idx(i, j, n)] + B[idx(j, i, n)]) / 2.0;
-    }
-  }
-
-  // DIAG_SCALE > 0 uses f*sqrt(n) (barely SPD, ill-conditioned); otherwise
-  // n/32.
-  real diag_shift = DIAG_SCALE > 0 ? DIAG_SCALE * std::sqrt(real(n))
-                                   : fmax(real(n) / 32, 1.0);
-  for (int i = 0; i < n; ++i)
-    A[idx(i, i, n)] += diag_shift;
-}
-
-bool run_tests() {
-  bool all_passed = true;
-  if (!test_matvec_identity()) {
-    all_passed = false;
-    std::cout << "matvec identity failed!\n";
-  }
-
-  if (!test_matvec_simple()) {
-    all_passed = false;
-    std::cout << "matvec simple failed!\n";
-  }
-
-  if (!test_dot()) {
-    all_passed = false;
-    std::cout << "dot failed!\n";
-  }
-
-  return all_passed;
-}
-
-int main() {
-  if (!run_tests()) {
-    std::cout << "A test failed!\n";
-    return -1;
-  }
-
-  if (STOP_AFTER_TESTS)
-    return 0;
-
-  const int n = 8192;
-  const int cg_max_iter = 32;
-
-  // TODO (exercise step 1): convert these allocations to cudaMallocManaged
+  // TODO EX1: convert these allocations to cudaMallocManaged
   // Note: not all these allocations need to be converted.
   // You should follow where the pointers are used to figure out which could be
   // passed to kernels and so need to be converted.
@@ -114,10 +66,15 @@ int main() {
   real *b = new real[n];
   real *x = new real[n];
 
-  init_rng(RANDOMISE_SEED);
+  std::cout << "\n";
 
   // Initial conditions
-  generate_positive_definite(A, n); // Generate positive def matrix
+  if(well_conditioned) {
+    std::cout << "Matrix is POORLY conditioned\n";
+  } else {
+    std::cout << "Matrix is WELL conditioned\n";
+  }
+  generate_positive_definite(A, n, !well_conditioned); // Generate positive def matrix
   std::cout << "Generating random solution\n";
   fill_rand_vec(x_soln, n, -1.0, 1.0); // Generate a random solution vector
   std::cout << "Generating right hand side\n";
@@ -125,7 +82,10 @@ int main() {
          n); // Multiple matrix with solution to get RHS of equation, b
   std::fill(x, x + n, 0.0);
 
+  std::cout << "\n";
+
   // Solve
+  std::cout << "Starting solver\n";
   auto start = high_resolution_clock::now();
   int iters;
   iters = cg_solve(x, A, b, n, cg_max_iter);
@@ -151,4 +111,79 @@ int main() {
   delete[] x;
 
   return 0;
+}
+
+// ============================================================
+// YOU DO NOT NEED TO READ BELOW THIS LINE
+// ============================================================
+
+/// Generate b from Ax = b
+void calc_b(real *b, const real *A, const real *x, const int n) {
+#pragma omp parallel for
+  for (int i = 0; i < n; ++i) {
+    b[i] = 0.0;
+
+    for (int j = 0; j < n; ++j) {
+      b[i] += A[idx(i, j, n)] * x[j];
+    }
+  }
+}
+
+/// Fill x with random values in [min, max)
+void fill_rand_vec(real *x, int size, real min, real max) {
+  std::uniform_real_distribution<real> dist(min, max);
+  for (int i = 0; i < size; ++i) {
+    x[i] = dist(rng);
+  }
+}
+
+/// Create a random, positive-definite matrix
+void generate_positive_definite(real *A, int n, bool poorly_conditioned_matrix) {
+  std::cout << "Generating matrix\n";
+  // Create a totally random matrix
+  auto B = std::vector<real>(n * n);
+  fill_rand_vec(B.data(), n * n, 0.0, 1.0);
+
+// Make a symmetric matrix
+#pragma omp parallel for
+  for (int i = 0; i < n; ++i) {
+    for (int j = 0; j < n; ++j) {
+      A[idx(i, j, n)] = (B[idx(i, j, n)] + B[idx(j, i, n)]) / 2.0;
+    }
+  }
+
+  real diag_shift;
+  if(poorly_conditioned_matrix) {
+    // Change DIAG_SCALE to tweak how well-conditioned the matrix is (changes number of iterations to convergence)
+    // 0.42 is stable and results in a fairly poorly-conditioned matrix (i.e. lots of iterations!)
+    // Other values are untested
+    const real DIAG_SCALE = 0.42;
+    diag_shift = DIAG_SCALE * std::sqrt(real(n));
+  } else {
+    // make the matrix extremely well conditioned (should converge very quickly)
+    diag_shift = fmax(real(n) / 32, 1.0);
+  }
+
+  for (int i = 0; i < n; ++i)
+    A[idx(i, i, n)] += diag_shift;
+}
+
+bool all_tests_pass() {
+  bool all_passed = true;
+  if (!test_matvec_identity()) {
+    all_passed = false;
+    std::cout << "matvec identity failed!\n";
+  }
+
+  if (!test_matvec_simple()) {
+    all_passed = false;
+    std::cout << "matvec simple failed!\n";
+  }
+
+  if (!test_dot()) {
+    all_passed = false;
+    std::cout << "dot failed!\n";
+  }
+
+  return all_passed;
 }

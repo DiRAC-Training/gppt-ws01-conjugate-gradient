@@ -3,10 +3,14 @@
 #include <cublas_v2.h>
 #include <cuda_runtime.h>
 
+#include "errors.hpp"
+#include "idx.hpp"
 #include "solver.hpp"
 
-#ifndef BLOCK_SIZE
-#define BLOCK_SIZE 128
+#ifdef BLOCK_SIZE
+const int block_size = BLOCK_SIZE;
+#else
+const int block_size = 32;
 #endif
 
 // Wrapper struct providing a cuBLAS handle with automatic setup and teardown.
@@ -23,26 +27,41 @@ __global__ void matvec_kernel(real *y, const real *matrix_data, const real *x,
                               int n) {
   int i = blockIdx.x * blockDim.x + threadIdx.x;
   if (i < n) {
-    // TODO (exercise step 2):
+    // TODO EX2:
     //     compute y[i] = sum over j of vals[i * n + j] * x[j]
   }
 }
 
 __global__ void axpby_kernel(real *y, const real *x, real alpha, real beta,
                              int n) {
-  // TODO (exercise step 3):
-  //     one thread per element; compute y[i] = alpha * x[i] + beta * y[i]
+  // TODO EX3:
+  //     compute y[i] = alpha * x[i] + beta * y[i]
+}
+
+/// Copied from solver.cpp
+void matvec_cpu(real *y, const real *A, const real *x, const int n) {
+#pragma omp parallel for
+  for (int i = 0; i < n; i++) {
+    real sum = 0.0;
+    for (int j = 0; j < n; j++)
+      sum += A[idx(i, j, n)] * x[j];
+    y[i] = sum;
+  }
 }
 
 // Once matvec_kernel has been implemented above, this launcher
 // will run on the GPU with no further changes needed.
 void matvec(real *y, const real *A, const real *x, const int n) {
-  int grid = (n + BLOCK_SIZE - 1) / BLOCK_SIZE;
-  matvec_kernel<<<grid, BLOCK_SIZE>>>(y, A, x, n);
-  cudaDeviceSynchronize();
+  // TODO EX2 comment the line below out to disable the CPU version
+  matvec_cpu(y, A, x, n);
+
+  // TODO EX2 uncomment the lines below to enable the GPU version
+  // int n_blocks = (n + block_size - 1) / block_size;
+  // matvec_kernel<<<n_blocks, block_size>>>(y, A, x, n);
+  // CHECK_LAST_CUDA_ERROR();
 }
 
-// TODO (exercise step 3): replace the CPU fallback below with a launch of
+// TODO EX3: replace the CPU fallback below with a launch of
 // axpby_kernel, following the same pattern as matvec() above. The fallback
 // is only here so that intermediate builds (after porting matvec in step 2
 // but before porting axpby) still produce correct answers; it relies on x
@@ -57,13 +76,14 @@ void axpby(real *y, const real *x, const real alpha, const real beta,
 real dot(const real *a, const real *b, const int n) {
   real result = 0.0f;
   cublasSdot(cublas.handle, n, a, 1, b, 1, &result);
+  CHECK_LAST_CUDA_ERROR();
   return result;
 }
 
 // Solve A*x = b using the conjugate gradient method.
 int cg_solve(real *x, const real *A, const real *b, const int n,
              const int max_iter) {
-  // TODO (exercise step 1): convert these allocations to cudaMallocManaged
+  // TODO EX1: convert these allocations to cudaMallocManaged
   real *r = new real[n];
   real *p = new real[n];
   real *A_times_p = new real[n];
@@ -102,13 +122,12 @@ int cg_solve(real *x, const real *A, const real *b, const int n,
     real beta = residual_sq_new / residual_sq_old;
     axpby(p, r, 1.0, beta, n);
 
-    if (n_iter % 50 == 0)
-      std::printf("%d: r = %.6e\n", n_iter, residual_sq_new);
+    std::printf("%d: r = %.6e\n", n_iter, residual_sq_new);
 
     residual_sq_old = residual_sq_new;
   }
 
-  // TODO (exercise step 1): convert these deallocations to cudaFree
+  // TODO EX1: convert these deallocations to cudaFree
   delete[] r;
   delete[] p;
   delete[] A_times_p;

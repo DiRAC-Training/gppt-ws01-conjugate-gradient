@@ -23,7 +23,7 @@ build/%.o: src/%.cu $(HEADERS) | build
 	nvcc -O3 -arch=native -Iinclude/ $(EXTRA_FLAGS) -c $< -o $@
 
 # The learner's version!
-fixme: build/solver_FIXME.o build/main.o build/test.o | build
+fixme: build/solver_FIXME.o build/main.o build/solution/test.o | build
 	$(CXX) -L"$(CUDA_PATH)/lib" -lcublas -lcudart $^ -o build/$@
 
 ## Solutions
