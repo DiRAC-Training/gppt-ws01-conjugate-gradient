@@ -23,7 +23,7 @@ int main(int argc, char *argv[]) {
   // Parameters
   const int seed_in = get_argval<int>(argv, argv + argc, "--seed", -1);
   const uint n = get_argval<uint>(argv, argv + argc, "-n", 8192);
-  const uint cg_max_iter = get_argval<uint>(argv, argv + argc, "-cg_max_iter", 32);
+  const uint cg_max_iter = get_argval<uint>(argv, argv + argc, "--cg_max_iter", 32);
   const bool well_conditioned = get_arg(argv, argv + argc, "--well_conditioned");
   const bool disable_unit_tests =
       get_arg(argv, argv + argc, "--disable_unit_tests");
