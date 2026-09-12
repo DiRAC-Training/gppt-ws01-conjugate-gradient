@@ -5,10 +5,6 @@
 #include "errors.hpp"
 #include "solver.hpp"
 
-#ifndef BLOCK_SIZE
-#define BLOCK_SIZE 128
-#endif
-
 // Wrapper struct providing a cuBLAS handle with automatic setup and teardown.
 struct CublasHandle {
   cublasHandle_t handle;
@@ -20,35 +16,37 @@ struct CublasHandle {
 };
 static CublasHandle cublas;
 
-// Dense matrix-vector product kernel: y = A * x. One thread per row.
-__global__ void matvec_kernel(real *y, const real *A, const real *x, int n) {
-  int i = blockIdx.x * blockDim.x + threadIdx.x;
-  if (i < n) {
-    real sum = 0.0;
-    for (int j = 0; j < n; j++)
-      sum += A[i * n + j] * x[j];
-    y[i] = sum;
-  }
-}
-
-// AXPBY kernel: y = alpha * x + beta * y. One thread per element.
-__global__ void axpby_kernel(real *y, const real *x, real alpha, real beta,
-                             int n) {
-  int i = blockIdx.x * blockDim.x + threadIdx.x;
-  if (i < n)
-    y[i] = alpha * x[i] + beta * y[i];
-}
-
+// Dense matrix-vector product: y = A * x. A is symmetric and fully stored, so
+// Ssymv reads one triangle and the row-major/column-major transpose is a no-op;
+// halves matrix traffic.
 void matvec(real *y, const real *A, const real *x, const int n) {
-  int grid = (n + BLOCK_SIZE - 1) / BLOCK_SIZE; // one thread per row
-  matvec_kernel<<<grid, BLOCK_SIZE>>>(y, A, x, n);
+  const real one = 1.0f, zero = 0.0f;
+#ifdef SINGLE_PRECISION
+  cublasSsymv(cublas.handle, CUBLAS_FILL_MODE_UPPER, n, &one, A, n, x, 1, &zero,
+              y, 1);
+#else
+  cublasDsymv(cublas.handle, CUBLAS_FILL_MODE_UPPER, n, &one, A, n, x, 1, &zero,
+              y, 1);
+#endif
   CHECK_LAST_CUDA_ERROR();
 }
 
+// AXPBY operation: y = alpha * x + beta * y.
 void axpby(real *y, const real *x, const real alpha, const real beta,
            const int n) {
-  int grid = (n + BLOCK_SIZE - 1) / BLOCK_SIZE;
-  axpby_kernel<<<grid, BLOCK_SIZE>>>(y, x, alpha, beta, n);
+  if (beta != 1.0f) {
+#ifdef SINGLE_PRECISION
+    cublasSscal(cublas.handle, n, &beta, y, 1);
+#else
+    cublasDscal(cublas.handle, n, &beta, y, 1);
+#endif
+    CHECK_LAST_CUDA_ERROR();
+  }
+#ifdef SINGLE_PRECISION
+  cublasSaxpy(cublas.handle, n, &alpha, x, 1, y, 1);
+#else
+  cublasDaxpy(cublas.handle, n, &alpha, x, 1, y, 1);
+#endif
   CHECK_LAST_CUDA_ERROR();
 }
 
@@ -72,7 +70,7 @@ int cg_solve(real *x, const real *A, const real *b, const int n,
   CHECK_CUDA_ERROR(cudaMalloc(&p, n * sizeof(real)));
   CHECK_CUDA_ERROR(cudaMalloc(&A_times_p, n * sizeof(real)));
 
-  // Step 1: r_0 = f - K*x_0
+  // Step 1: r_0 = b - A*x_0
   matvec(r, A, x, n);
   axpby(r, b, 1.0, -1.0, n);
 
@@ -84,14 +82,14 @@ int cg_solve(real *x, const real *A, const real *b, const int n,
   int n_iter;
 
   for (n_iter = 0; n_iter < max_iter; n_iter++) {
-    // Step 3a: alpha_k = (r_k . r_k) / (p_k . K*p_k)
+    // Step 3a: alpha_k = (r_k . r_k) / (p_k . A*p_k)
     matvec(A_times_p, A, p, n);
     real alpha = residual_sq_old / dot(p, A_times_p, n);
 
     // Step 3b: x_{k+1} = x_k + alpha_k * p_k
     axpby(x, p, alpha, 1.0, n);
 
-    // Step 3c: r_{k+1} = r_k - alpha_k * K*p_k
+    // Step 3c: r_{k+1} = r_k - alpha_k * A*p_k
     axpby(r, A_times_p, -alpha, 1.0, n);
 
     real residual_sq_new = dot(r, r, n);
@@ -109,8 +107,6 @@ int cg_solve(real *x, const real *A, const real *b, const int n,
 
     residual_sq_old = residual_sq_new;
   }
-
-  cudaDeviceSynchronize();
 
   CHECK_CUDA_ERROR(cudaFree(r));
   CHECK_CUDA_ERROR(cudaFree(p));

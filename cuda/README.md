@@ -12,7 +12,7 @@ The conjugate gradient (CG) finds the solution $x$ to the matrix equation $A\vec
 
 The **conjugate gradient (CG)** method is found in `solver.cpp`. This is the part of the code you will port. The CG loop itself runs on the host; each iteration calls three linear algebra routines, and these are what we will move onto the GPU:
 
-- `matvec` — dense matrix–vector product $\mathbf{y} = K \mathbf{x}$
+- `matvec` — dense matrix–vector product $\mathbf{y} = A \mathbf{x}$
 - `axpby`  — vector update $\mathbf{y} = \alpha \mathbf{x} + \beta \mathbf{y}$
 - `dot`    — inner product $\mathbf{a} \cdot \mathbf{b}$
 
@@ -126,7 +126,9 @@ The allocations you should convert are near comments marked with `// TODO EX1` i
 
 **Follow where these pointers are used to work out if the pointer is used in a CUDA kernel. If it is, it will need to be converted to managed memory.**
 
-**Hint**
+<details>
+<summary>Hint</summary>
+
 Regular pointers allocated and deallocated through `new` and `delete` are converted as:
 
 ```cpp
@@ -142,10 +144,12 @@ cudaMallocManaged(&v, n * sizeof(float));
 cudaFree(v);
 ```
 
+</details>
 
 **Try to identify yourself which allocations you think need converting before checking the table in the hint below**.
 
-**Hint**
+<details>
+<summary>Hint</summary>
 
 | File         | Allocation(s) |
 |--------------|---------------|
@@ -153,6 +157,8 @@ cudaFree(v);
 | `solver_FIXME.cu`  | `r`, `p`, `A_times_p` (inside `cg_solve`) |
 
 `x_soln` does not need converted because it is never used by a kernel.
+
+</details>
 
 
 Currently in `solver_FIXME.cu`, both `matvec` and `axpby` will run on the CPU, but `dot` has already been converted to a cuBlas call. This means if you have implemented the correct managed allocations and the memory can be accessed from both the host and device, the code should compile and run.
@@ -189,12 +195,17 @@ The kernel should perform the same operation as the CPU version in `solver.cpp`.
 
 Try to come up with your own parallelisation of the operation before checking the hint below or peeking at the solution.
 
-**Hint**
+<details>
+<summary>Hint</summary>
+
 The natural parallelisation is one thread per row of the matrix. Each thread should compute its row's dot product against the vector `x` and write the result into `y`.
 
+</details>
 
-**Hint**
-Each thread should deal with the `i`th row, and perform a sum like:
+<details>
+<summary>Hint</summary>
+
+Each thread should deal with the i-th row, and perform a sum like:
 
 ```cuda
 real sum = 0.0;
@@ -202,9 +213,14 @@ for (int j = 0; j < n; j++)
   sum += A[i * n + j] * x[j];
 ```
 
+</details>
 
-**Hint**
+<details>
+<summary>Hint</summary>
+
 Feel free to peek at the solution in `solution/solver_cuda.cu`!
+
+</details>
 
 
 Once you have finished your GPU implementation of `matvec`, you have a choice of how to test it. You can either rely on the end-to-end test of the entire algorithm run through `main` or you can adapt the existing CPU unit tests to work with your new GPU code. Since we have provided solutions in `solution/test.cpp`, you can also choose to copy the provided unit test solutions and nobody can stop you.
@@ -218,17 +234,24 @@ There are two sub-tasks in `solver_FIXME.cu`:
 1. Fill in the body of `axpby_kernel`.
 2. Replace the CPU fallback inside the `axpby` launcher with a kernel launch, following the same pattern as `matvec`.
 
-**Hint**
+<details>
+<summary>Hint</summary>
+
 `axpby` is purely element-wise: one thread per element, compute `y[i] = alpha * x[i] + beta * y[i]`.
 
+</details>
 
-**Hint**
+<details>
+<summary>Hint</summary>
+
 The kernel launch in `axpby` should look something like:
 
 ```cuda
 int grid = (n + BLOCK_SIZE - 1) / BLOCK_SIZE;
 axpby_kernel<<<grid, BLOCK_SIZE>>>(y, x, alpha, beta, n);
 ```
+
+</details>
 
 
 There are no unit tests for this function so to test it, **you should compile and run the entire program again.**

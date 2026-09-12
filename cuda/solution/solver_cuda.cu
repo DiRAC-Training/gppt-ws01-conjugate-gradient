@@ -20,22 +20,15 @@ struct CublasHandle {
 };
 static CublasHandle cublas;
 
-// Dense matrix-vector product kernel: y = A * x. One warp per row: the 32
-// lanes stream the row cooperatively so the global loads coalesce, then the
-// partial sums are combined with a warp-shuffle reduction.
+// Dense matrix-vector product kernel: y = A * x. One thread per row.
 __global__ void matvec_kernel(real *y, const real *A, const real *x, int n) {
-  int row = (blockIdx.x * blockDim.x + threadIdx.x) / 32;
-  int lane = threadIdx.x & 31;
-  if (row >= n)
-    return;
-  real sum = 0.0;
-  for (int j = lane; j < n;
-       j += 32) // lanes read A[row*n + j..j+31] -> coalesced
-    sum += A[row * n + j] * x[j];
-  for (int offset = 16; offset > 0; offset >>= 1) // warp-reduce the partials
-    sum += __shfl_down_sync(0xffffffff, sum, offset);
-  if (lane == 0)
-    y[row] = sum;
+  int i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i < n) {
+    real sum = 0.0;
+    for (int j = 0; j < n; j++)
+      sum += A[i * n + j] * x[j];
+    y[i] = sum;
+  }
 }
 
 // AXPBY kernel: y = alpha * x + beta * y. One thread per element.
@@ -47,7 +40,7 @@ __global__ void axpby_kernel(real *y, const real *x, real alpha, real beta,
 }
 
 void matvec(real *y, const real *A, const real *x, const int n) {
-  int grid = (n * 32 + BLOCK_SIZE - 1) / BLOCK_SIZE; // one warp per row
+  int grid = (n + BLOCK_SIZE - 1) / BLOCK_SIZE; // one thread per row
   matvec_kernel<<<grid, BLOCK_SIZE>>>(y, A, x, n);
   CHECK_LAST_CUDA_ERROR();
 }
@@ -79,7 +72,7 @@ int cg_solve(real *x, const real *A, const real *b, const int n,
   CHECK_CUDA_ERROR(cudaMalloc(&p, n * sizeof(real)));
   CHECK_CUDA_ERROR(cudaMalloc(&A_times_p, n * sizeof(real)));
 
-  // Step 1: r_0 = f - K*x_0
+  // Step 1: r_0 = b - A*x_0
   matvec(r, A, x, n);
   axpby(r, b, 1.0, -1.0, n);
 
@@ -91,14 +84,14 @@ int cg_solve(real *x, const real *A, const real *b, const int n,
   int n_iter;
 
   for (n_iter = 0; n_iter < max_iter; n_iter++) {
-    // Step 3a: alpha_k = (r_k . r_k) / (p_k . K*p_k)
+    // Step 3a: alpha_k = (r_k . r_k) / (p_k . A*p_k)
     matvec(A_times_p, A, p, n);
     real alpha = residual_sq_old / dot(p, A_times_p, n);
 
     // Step 3b: x_{k+1} = x_k + alpha_k * p_k
     axpby(x, p, alpha, 1.0, n);
 
-    // Step 3c: r_{k+1} = r_k - alpha_k * K*p_k
+    // Step 3c: r_{k+1} = r_k - alpha_k * A*p_k
     axpby(r, A_times_p, -alpha, 1.0, n);
 
     real residual_sq_new = dot(r, r, n);
@@ -116,6 +109,8 @@ int cg_solve(real *x, const real *A, const real *b, const int n,
 
     residual_sq_old = residual_sq_new;
   }
+
+  cudaDeviceSynchronize();
 
   CHECK_CUDA_ERROR(cudaFree(r));
   CHECK_CUDA_ERROR(cudaFree(p));

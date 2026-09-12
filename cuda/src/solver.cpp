@@ -41,7 +41,7 @@ int cg_solve(real *x, const real *A, const real *b, const int n,
   real *p = new real[n];
   real *A_times_p = new real[n];
 
-  // Step 1: r_0 = f - K*x_0
+  // Step 1: r_0 = b - A*x_0
   matvec(r, A, x, n);
 #pragma omp parallel for
   for (int i = 0; i < n; i++) {
@@ -55,14 +55,14 @@ int cg_solve(real *x, const real *A, const real *b, const int n,
   int n_iter;
 
   for (n_iter = 0; n_iter < max_iter; n_iter++) {
-    // Step 3a: alpha_k = (r_k . r_k) / (p_k . K*p_k)
+    // Step 3a: alpha_k = (r_k . r_k) / (p_k . A*p_k)
     matvec(A_times_p, A, p, n);
     real alpha = residual_sq_old / dot(p, A_times_p, n);
 
     // Step 3b: x_{k+1} = x_k + alpha_k * p_k
     axpby(x, p, alpha, 1.0, n);
 
-    // Step 3c: r_{k+1} = r_k - alpha_k * K*p_k
+    // Step 3c: r_{k+1} = r_k - alpha_k * A*p_k
     axpby(r, A_times_p, -alpha, 1.0, n);
 
     // Step 3d: beta_k = (r_{k+1} . r_{k+1}) / (r_k . r_k)
