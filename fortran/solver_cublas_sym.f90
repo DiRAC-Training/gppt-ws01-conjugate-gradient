@@ -32,7 +32,7 @@ contains
 
     one = 1.0; zero = 0.0
     call ensure_handle()
-    !$omp target data use_device_addr(A, x, y)
+    !$omp target data use_device_ptr(A, x, y)
     stat = cublasSsymv(handle, CUBLAS_FILL_MODE_UPPER, n, one, A, n, x, 1, zero, y, 1)
     !$omp end target data
   end subroutine matvec
@@ -46,7 +46,7 @@ contains
     integer(c_int) :: stat
 
     call ensure_handle()
-    !$omp target data use_device_addr(a, b)
+    !$omp target data use_device_ptr(a, b)
     stat = cublasSdot(handle, n, a, 1, b, 1, r)
     !$omp end target data
     res = r
@@ -64,7 +64,7 @@ contains
 
     a = alpha; b = beta
     call ensure_handle()
-    !$omp target data use_device_addr(x, y)
+    !$omp target data use_device_ptr(x, y)
     if (b /= 1.0) stat = cublasSscal(handle, n, b, y, 1)
     stat = cublasSaxpy(handle, n, a, x, 1, y, 1)
     !$omp end target data

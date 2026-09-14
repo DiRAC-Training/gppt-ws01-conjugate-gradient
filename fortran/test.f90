@@ -37,18 +37,18 @@ contains
     integer :: i
 
     ! Create a matrix with known values
-    mat = [-1.0, -6.0,   2.0,  &
-            4.0,  3.0,   10.0, &
+    mat = [-1.0,  4.0,   2.0,   &
+            4.0,  3.0,  -100.0, &
             0.0, -100.0, 1.0]
-    
+
     ! x and y_soln are calculated solutions to y = Ax.
     x = [-1.0, 2.0, 0.0]
 
     ! M * x =
-    ! -1*-1 + -6*2 +  2*0 =  -11
-    !  4*-1 +  3*2 + 10*0 =    2
-    !  0*-1 + -100*2 + 1*0 = -200
-    y_soln = [-11.0, 2.0, -200.0]
+    ! -1*-1 + 4*2   + 2*0  =  9
+    !  4*-1 + 3*2   + 10*0 =  2
+    !  0*-1 + 100*2 + 1*0  = -200
+    y_soln = [9.0, 2.0, -200.0]
 
     !$omp target data map(to: mat(1:n*n), x(1:n)) map(from: y(1:n))
     call matvec(y, mat, x, n)
