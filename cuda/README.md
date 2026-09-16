@@ -1,4 +1,4 @@
-# Recap exercise: porting a conjugate gradient algorithm
+# Porting exercise: porting a conjugate gradient algorithm
 
 In this exercise you will be guided through the porting of a conjugate gradient algorithm from an existing CPU implementation to a GPU implementation. You do not need to understand the details of the algorithm but the components you will be porting include a matrix-vector multiplication, a dot product and a type of vector addition.
 
@@ -102,6 +102,18 @@ Before diving into changing the code, **get used to the key parts in `main.cpp` 
     - Note: This is why we use `real` instead of explicitly `float` or `double` for declaring floating point numbers throughout the code. This is a particularly simple but coarse-grained and potentially error-prone way of supporting different precisions. More sophisticated approaches will offer different trade-offs.
 
 You should notice at the start of `main` that some unit tests are run to check the result of `matvec` and `dot` against known inputs and outputs. This should give you some confidence as you edit the code that you're maintaining correctness. The reported residual also indicates correctness. Generally, the residual `r` should get smaller until it reaches the stopping value (set to around `1e-12`). **Once converged, the reported average error for a matrix size of 8192 x 8192 should be around $0.001$.**
+
+---
+
+To get an idea of the intended performance, try profiling the GPU solution with:
+
+```bash
+make cuda && ./build/cuda
+nsys profile -o build/report1 ./build/cuda
+nsys stats -r cuda_api_sum,cuda_gpu_kern_sum,cuda_gpu_mem_time_sum  build/report1.nsys-rep
+```
+
+**Do not look at the solution code yet.**
 
 ## Task 1: The porting task
 
@@ -264,3 +276,4 @@ With all operations now running on the GPU, you should now see a meaningful spee
 - The block size can be changed at compile time with `make fixme BLOCK_SIZE=128`. Run with a variety of block sizes to find the optimal value.
 - Profile the GPU version  (e.g. `nsys stats <exe>`) and identify which kernel dominates the runtime. Is it what you expected?
 - Compare the performance of the various solutions. Which is optimal for the default problem size? Does the optimal solution change with different problem sizes?
+- Compare against the cuBLAS-based solutions: `make cublas && ./build/cublas` and `make cublas_sym && ./build/cublas_sym`.

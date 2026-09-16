@@ -1,11 +1,10 @@
 GPU_COMPILE:=nvfortran -mp=gpu -gpu=cc80 -Minfo=mp -g -O3
 # GPU_COMPILE:=flang -O3 -fopenmp -march=native --offload-arch=sm_80 -fopenmp-version=50 # Uncomment for flang
 
-.PHONY: cpu gpu cublas cublas_sym clean
+.PHONY: cpu gpu fixme cublas cublas_sym clean
 
 all: cpu gpu cublas cublas_sym
 
-# SOURCES = test.f90 main.f90 precision.f90
 BEFORE = precision.f90
 AFTER  = test.f90 main.f90
 
